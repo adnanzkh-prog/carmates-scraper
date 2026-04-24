@@ -1,0 +1,9 @@
+{
+  "name": "carmates-ui",
+  "dependencies": {
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "axios": "^1.6.0"
+  }
+}
