@@ -9,7 +9,7 @@ export default function Home() {
   const [query, setQuery] = useState("toyota");
 
   const fetchListings = async () => {
-    const res = await axios.get(`http://localhost:8000/search?q=${query}`);
+    const res = await axios.get(`http://carmates-scraper.vercel.app/search?q=${query}`);
     setListings(res.data);
   };
 
