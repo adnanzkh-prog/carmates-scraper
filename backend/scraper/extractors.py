@@ -1,5 +1,6 @@
 # scraper/extractors.py
 from typing import Optional, List
+import json
 import logging
 
 def extract_price(soup) -> Optional[float]:
