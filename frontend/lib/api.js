@@ -1,49 +1,41 @@
-// frontend/lib/api.js
 import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-// Debug: log the API URL (remove in production)
+// Debug log
 if (typeof window !== 'undefined') {
   console.log('API URL:', API_URL);
 }
 
+if (!API_URL) {
+  console.error('NEXT_PUBLIC_API_URL is not set! Using fallback.');
+}
+
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: API_URL || 'https://renewed-adventure-production-fef0.up.railway.app',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor
 api.interceptors.request.use(
   (config) => {
-    console.log('API Request:', config.method?.toUpperCase(), config.url, config.params);
+    console.log('API Request:', config.method?.toUpperCase(), config.url);
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Response interceptor
 api.interceptors.response.use(
-  (response) => {
-    console.log('API Response:', response.status, response.data);
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error('API Error:', error.message, error.response?.status, error.response?.data);
+    console.error('API Error:', error.message);
     if (error.code === 'ECONNABORTED') {
       return Promise.reject(new Error('Request timed out. Please try again.'));
     }
-    if (error.response?.status === 429) {
-      return Promise.reject(new Error('Too many requests. Please wait.'));
-    }
-    if (error.response?.status >= 500) {
-      return Promise.reject(new Error('Server error. Please try again later.'));
-    }
     if (!error.response) {
-      return Promise.reject(new Error('Cannot connect to server. Check your connection.'));
+      return Promise.reject(new Error('Network error. Cannot connect to server.'));
     }
     return Promise.reject(error);
   }
@@ -55,7 +47,6 @@ export const searchCars = async (query, filters = {}) => {
     ...filters,
   };
   
-  // Remove empty values
   Object.keys(params).forEach(key => {
     if (params[key] === '' || params[key] === null || params[key] === undefined) {
       delete params[key];
@@ -63,9 +54,6 @@ export const searchCars = async (query, filters = {}) => {
   });
 
   const { data } = await api.get('/search', { params });
-  
-  // Backend returns { results: [...], total: N }
-  // Return the full response so page can access results and total
   return data;
 };
 

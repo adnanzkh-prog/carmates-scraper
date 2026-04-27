@@ -17,13 +17,16 @@ export default function SearchBar({ onSearch, loading }) {
         <Search className="search-icon" size={20} />
         <input
           type="text"
+          name="search"
+          id="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search cars (e.g., Toyota Camry, BMW X5)..."
           className="search-input"
+          autoComplete="off"
         />
-        <button
-          type="submit"
+        <button 
+          type="submit" 
           className="search-button"
           disabled={loading || !query.trim()}
         >

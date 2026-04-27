@@ -11,39 +11,27 @@ export default function Home() {
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({});
   const [apiStatus, setApiStatus] = useState('checking');
-  const [debugInfo, setDebugInfo] = useState('');
 
-  // Check API health on mount
   useEffect(() => {
     healthCheck()
-      .then((data) => {
-        setApiStatus('connected');
-        setDebugInfo(JSON.stringify(data, null, 2));
-      })
-      .catch((err) => {
-        setApiStatus('disconnected');
-        setDebugInfo(err.message);
-      });
+      .then(() => setApiStatus('connected'))
+      .catch(() => setApiStatus('disconnected'));
   }, []);
 
   const handleSearch = async (query) => {
     setLoading(true);
     setError(null);
-    setDebugInfo('');
     
     try {
       const data = await searchCars(query, filters);
-      console.log('Search data:', data);
+      console.log('Search response:', data);
       
-      // Handle different response formats
-      const resultsArray = data.results || data.data || data || [];
+      const resultsArray = data.results || [];
       setResults(resultsArray);
-      setDebugInfo(`Found ${resultsArray.length} results. Raw: ${JSON.stringify(data).slice(0, 200)}...`);
     } catch (err) {
       console.error('Search error:', err);
       setError(err.message || 'Failed to fetch results');
       setResults([]);
-      setDebugInfo(`Error: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -65,7 +53,7 @@ export default function Home() {
           <h1>🚗 CarMates</h1>
           <p>Find your perfect car across Australia</p>
           <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', opacity: 0.8 }}>
-            API Status: {apiStatus === 'connected' ? '🟢 Connected' : '🔴 Disconnected'}
+            API: {apiStatus === 'connected' ? '🟢 Connected' : '🔴 Disconnected'}
           </div>
         </div>
       </header>
@@ -75,29 +63,20 @@ export default function Home() {
           <SearchBar onSearch={handleSearch} loading={loading} />
           <FilterPanel filters={filters} onFilterChange={handleFilterChange} />
         </div>
-        
-        {/* Debug panel - remove after fixing */}
-        {debugInfo && (
-          <div style={{ 
-            background: '#1e293b', 
-            color: '#94a3b8', 
-            padding: '1rem', 
-            borderRadius: '8px',
-            marginBottom: '1rem',
-            fontSize: '0.8rem',
-            fontFamily: 'monospace',
-            whiteSpace: 'pre-wrap',
-            maxHeight: '200px',
-            overflow: 'auto'
-          }}>
-            <strong>Debug:</strong>{'\n'}{debugInfo}
-          </div>
-        )}
 
         <ResultsGrid 
           results={results} 
           loading={loading} 
           error={error} 
+        />
+      </main>
+
+      <footer className="app-footer">
+        <p>© 2026 CarMates. Data sourced from multiple platforms.</p>
+      </footer>
+    </div>
+  );
+} 
         />
       </main>
 
