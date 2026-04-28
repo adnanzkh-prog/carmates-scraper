@@ -75,3 +75,4 @@ export default function Home() {
     </div>
   );
 }
+// Making sure the footer is correctly deployed and referenced in deployment
