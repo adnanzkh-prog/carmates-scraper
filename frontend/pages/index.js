@@ -21,11 +21,9 @@ export default function Home() {
   const handleSearch = async (query) => {
     setLoading(true);
     setError(null);
-    
     try {
       const data = await searchCars(query, filters);
       console.log('Search response:', data);
-      
       const resultsArray = data.results || [];
       setResults(resultsArray);
     } catch (err) {
@@ -64,19 +62,10 @@ export default function Home() {
           <FilterPanel filters={filters} onFilterChange={handleFilterChange} />
         </div>
 
-        <ResultsGrid 
-          results={results} 
-          loading={loading} 
-          error={error} 
-        />
-      </main>
-
-      <footer className="app-footer">
-        <p>© 2026 CarMates. Data sourced from multiple platforms.</p>
-      </footer>
-    </div>
-  );
-} 
+        <ResultsGrid
+          results={results}
+          loading={loading}
+          error={error}
         />
       </main>
 
