@@ -27,7 +27,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Get environment variables
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://carmates-scraper.vercel.app").strip()
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://carmates-scraper.pages.dev", "https://carmates.com.au", "https://carmates-scraper.vercel.app").strip()
 PORT = int(os.getenv("PORT", "8080"))
 
 # Pydantic models
