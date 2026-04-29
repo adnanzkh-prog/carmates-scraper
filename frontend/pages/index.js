@@ -30,28 +30,36 @@ export default function Home() {
       .catch(() => setApiStatus('disconnected'));
   }, []);
 
-  const handleSearch = useCallback(async (query) => {
-    setLoading(true);
-    setError(null);
+const handleSearch = async (query) => {
+  setLoading(true);
+  setError(null);
+  
+  try {
+    const data = await searchCars(query, filters);
+    console.log('Search response:', data);
     
-    try {
-      const data = await searchCars(query, filters);
-      console.log('Search response:', data);
-      
-      const resultsArray = data.results || [];
-      setResults(resultsArray);
-      setTotalResults(data.total || 0);
-      setSearchTime(data.search_time_ms || 0);
-      setSources(data.sources || []);
-    } catch (err) {
-      console.error('Search error:', err);
-      setError(err.message || 'Failed to fetch results');
-      setResults([]);
-      setSources([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [filters]);
+    // Ensure results have all required fields
+    const resultsArray = (data.results || []).map(car => ({
+      ...car,
+      // Ensure these fields exist
+      images: car.images || [],
+      url: car.url || '#',
+      source: car.source || 'Unknown',
+      accuracy_score: car.accuracy_score || 0,
+      verified: car.verified || false,
+      scraped_at: car.scraped_at || new Date().toISOString()
+    }));
+    
+    setResults(resultsArray);
+  } catch (err) {
+    console.error('Search error:', err);
+    setError(err.message || 'Failed to fetch results');
+    setResults([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
