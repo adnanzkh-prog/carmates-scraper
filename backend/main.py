@@ -27,8 +27,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Get environment variables
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://carmates-scraper.pages.dev", "https://carmates.com.au", "https://carmates-scraper.vercel.app").strip()
-PORT = int(os.getenv("PORT", "8080"))
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://carmates-scraper.pages.dev").strip()
+
+# CORS configuration - allow main domain + all preview subdomains
+origins = [
+    "http://localhost:3000",
+    "https://localhost:3000",
+    FRONTEND_URL,
+]
+
+# Add wildcard for Cloudflare Pages preview deployments
+if "carmates-scraper.pages.dev" in FRONTEND_URL:
+    origins.append("https://*.carmates-scraper.pages.dev")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+    max_age=3600,
+)
 
 # Pydantic models
 class CarListing(BaseModel):
