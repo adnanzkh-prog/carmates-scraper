@@ -277,6 +277,30 @@
   font-size: 0.75rem;
   color: var(--text-light);
 }
+
+/* Results Count with Source Breakdown */
+.results-count {
+  margin-bottom: 1rem;
+  color: var(--text-light);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.source-breakdown {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.source-count-tag {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  background: var(--background);
+  border-radius: 999px;
+  color: var(--text-light);
+}
 /* Responsive */
 @media (max-width: 768px) {
   .manual-form {
