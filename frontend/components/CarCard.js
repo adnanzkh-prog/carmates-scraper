@@ -1,8 +1,8 @@
-import { MapPin, Gauge, Calendar, DollarSign, ExternalLink, Shield, Star } from 'lucide-react';
+import { MapPin, Gauge, Calendar, DollarSign, ExternalLink, Star, Shield, AlertTriangle } from 'lucide-react';
 
 export default function CarCard({ car }) {
   const formatPrice = (price) => {
-    if (!price) return 'Price on request';
+    if (!price) return 'Contact for price';
     return `$${price.toLocaleString()}`;
   };
 
@@ -11,35 +11,26 @@ export default function CarCard({ car }) {
     return `${km.toLocaleString()} km`;
   };
 
-  // Get source color
-  const getSourceColor = (source) => {
-    const colors = {
-      'Carsales': '#dbeafe',
-      'eBay Australia': '#fce7f3',
-      'Gumtree': '#dcfce7',
-      'Facebook Marketplace': '#fef3c7',
-      'Manual Submission': '#e0e7ff',
-      'Sample Data': '#f3f4f6'
-    };
-    return colors[source] || '#f3f4f6';
+  const getAccuracyColor = (score) => {
+    if (score >= 80) return '#22c55e';
+    if (score >= 60) return '#fbbf24';
+    return '#ef4444';
   };
 
-  // Get source text color
-  const getSourceTextColor = (source) => {
-    const colors = {
-      'Carsales': '#1e40af',
-      'eBay Australia': '#9d174d',
-      'Gumtree': '#166534',
-      'Facebook Marketplace': '#92400e',
-      'Manual Submission': '#3730a3',
-      'Sample Data': '#374151'
+  const getSourceStyle = (source) => {
+    const styles = {
+      'Carsales': { bg: '#dbeafe', text: '#1e40af', icon: '🏢' },
+      'eBay Australia': { bg: '#fce7f3', text: '#9d174d', icon: '🛒' },
+      'Facebook Marketplace': { bg: '#fef3c7', text: '#92400e', icon: '👤' },
+      'Manual': { bg: '#e0e7ff', text: '#3730a3', icon: '✅' }
     };
-    return colors[source] || '#374151';
+    return styles[source] || { bg: '#f3f4f6', text: '#374151', icon: '📌' };
   };
+
+  const sourceStyle = getSourceStyle(car.source);
 
   return (
     <div className="car-card">
-      {/* Image Section */}
       <div className="car-image">
         {car.images && car.images[0] ? (
           <a href={car.url} target="_blank" rel="noopener noreferrer">
@@ -47,44 +38,32 @@ export default function CarCard({ car }) {
           </a>
         ) : (
           <a href={car.url} target="_blank" rel="noopener noreferrer" className="car-image-placeholder">
-            <span>🚗 No Image</span>
+            <span>{sourceStyle.icon} No Image</span>
           </a>
         )}
         
         {/* Source Badge */}
-        <span 
-          className="source-badge"
-          style={{ 
-            background: getSourceColor(car.source),
-            color: getSourceTextColor(car.source)
-          }}
-        >
-          {car.source === 'Manual Submission' && '✅ '}
-          {car.source === 'Facebook Marketplace' && '⚠️ '}
-          {car.source}
+        <span className="source-badge" style={{ background: sourceStyle.bg, color: sourceStyle.text }}>
+          {sourceStyle.icon} {car.source}
         </span>
 
         {/* Accuracy Score */}
-        {car.accuracy_score > 0 && (
-          <span className="accuracy-badge" title="Relevance score (0-100)">
-            <Star size={10} fill="#fbbf24" color="#fbbf24" />
-            {car.accuracy_score}%
-          </span>
-        )}
+        <div className="accuracy-badge" style={{ borderColor: getAccuracyColor(car.accuracy_score) }}>
+          <Star size={10} fill={getAccuracyColor(car.accuracy_score)} color={getAccuracyColor(car.accuracy_score)} />
+          <span>{car.accuracy_score}% match</span>
+        </div>
 
-        {/* Verified Badge */}
-        {car.verified && (
-          <span className="verified-badge" title="Manually verified">
-            <Shield size={10} />
-            Verified
-          </span>
+        {/* Warning for low accuracy */}
+        {car.accuracy_score < 60 && car.source === 'Facebook Marketplace' && (
+          <div className="accuracy-warning" title="Low accuracy — verify before contacting">
+            <AlertTriangle size={12} />
+          </div>
         )}
       </div>
       
       <div className="car-content">
-        {/* Title as clickable link */}
         <h3 className="car-title">
-          <a href={car.url} target="_blank" rel="noopener noreferrer" className="title-link">
+          <a href={car.url} target="_blank" rel="noopener noreferrer">
             {car.title}
           </a>
         </h3>
@@ -111,18 +90,168 @@ export default function CarCard({ car }) {
 
         <div className="car-footer">
           <span className="car-date">
-            Listed: {new Date(car.scraped_at).toLocaleDateString('en-AU')}
+            {new Date(car.scraped_at).toLocaleDateString('en-AU')}
           </span>
-          <a 
-            href={car.url} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="view-link"
-          >
-            View Listing <ExternalLink size={12} />
+          <a href={car.url} target="_blank" rel="noopener noreferrer" className="view-link">
+            View <ExternalLink size={12} />
           </a>
         </div>
       </div>
+
+      <style jsx>{`
+        .car-card {
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          overflow: hidden;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .car-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+        
+        .car-image {
+          height: 180px;
+          background: #f8fafc;
+          overflow: hidden;
+          position: relative;
+        }
+        
+        .car-image img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transition: transform 0.3s;
+        }
+        
+        .car-card:hover .car-image img {
+          transform: scale(1.05);
+        }
+        
+        .car-image-placeholder {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #94a3b8;
+          text-decoration: none;
+          font-size: 0.875rem;
+        }
+        
+        .source-badge {
+          position: absolute;
+          top: 8px;
+          left: 8px;
+          padding: 4px 10px;
+          border-radius: 999px;
+          font-size: 0.7rem;
+          font-weight: 700;
+          z-index: 2;
+        }
+        
+        .accuracy-badge {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          background: rgba(0,0,0,0.8);
+          color: white;
+          padding: 4px 8px;
+          border-radius: 6px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          z-index: 2;
+          border: 2px solid;
+        }
+        
+        .accuracy-warning {
+          position: absolute;
+          bottom: 8px;
+          right: 8px;
+          background: #ef4444;
+          color: white;
+          padding: 4px;
+          border-radius: 4px;
+          z-index: 2;
+        }
+        
+        .car-content {
+          padding: 1rem;
+        }
+        
+        .car-title {
+          font-size: 1rem;
+          font-weight: 600;
+          margin-bottom: 0.5rem;
+          line-height: 1.4;
+        }
+        
+        .car-title a {
+          color: #1e293b;
+          text-decoration: none;
+        }
+        
+        .car-title a:hover {
+          color: #2563eb;
+        }
+        
+        .car-price {
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+          color: #2563eb;
+          font-size: 1.25rem;
+          font-weight: 700;
+          margin-bottom: 0.75rem;
+        }
+        
+        .car-details {
+          display: flex;
+          gap: 1rem;
+          margin-bottom: 1rem;
+          flex-wrap: wrap;
+        }
+        
+        .detail-item {
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+          font-size: 0.875rem;
+          color: #64748b;
+        }
+        
+        .car-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding-top: 0.75rem;
+          border-top: 1px solid #e2e8f0;
+        }
+        
+        .car-date {
+          font-size: 0.75rem;
+          color: #94a3b8;
+        }
+        
+        .view-link {
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+          color: #2563eb;
+          text-decoration: none;
+          font-size: 0.875rem;
+          font-weight: 600;
+        }
+        
+        .view-link:hover {
+          text-decoration: underline;
+        }
+      `}</style>
     </div>
   );
 }
