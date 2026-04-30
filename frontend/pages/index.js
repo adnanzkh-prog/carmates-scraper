@@ -17,10 +17,10 @@ export default function Home() {
   const [sources, setSources] = useState([]);
   const [totalResults, setTotalResults] = useState(0);
   const [searchTime, setSearchTime] = useState(0);
+  const [showManualForm, setShowManualForm] = useState(false);
   const [manualUrl, setManualUrl] = useState('');
-  const [manualSubmitStatus, setManualSubmitStatus] = useState(null);
+  const [manualStatus, setManualStatus] = useState(null);
 
-  // Check API health on mount
   useEffect(() => {
     healthCheck()
       .then((data) => {
@@ -30,356 +30,331 @@ export default function Home() {
       .catch(() => setApiStatus('disconnected'));
   }, []);
 
-const handleSearch = async (query) => {
-  setLoading(true);
-  setError(null);
-  
-  try {
-    const data = await searchCars(query, filters);
-    console.log('Search response:', data);
+  const handleSearch = useCallback(async (query) => {
+    setLoading(true);
+    setError(null);
     
-    // Ensure results have all required fields
-    const resultsArray = (data.results || []).map(car => ({
-      ...car,
-      // Ensure these fields exist
-      images: car.images || [],
-      url: car.url || '#',
-      source: car.source || 'Unknown',
-      accuracy_score: car.accuracy_score || 0,
-      verified: car.verified || false,
-      scraped_at: car.scraped_at || new Date().toISOString()
-    }));
-    
-    setResults(resultsArray);
-  } catch (err) {
-    console.error('Search error:', err);
-    setError(err.message || 'Failed to fetch results');
-    setResults([]);
-  } finally {
-    setLoading(false);
-  }
-};
-
+    try {
+      const searchFilters = { ...filters, q: query };
+      const data = await searchCars(API_URL, searchFilters);
+      
+      setResults(data.results || []);
+      setTotalResults(data.total || 0);
+      setSearchTime(data.search_time_ms || 0);
+      setSources(data.sources || []);
+    } catch (err) {
+      console.error('Search error:', err);
+      setError(err.message || 'Failed to fetch results');
+      setResults([]);
+      setSources([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
 
   const handleFilterChange = (newFilters) => {
-    setFilters(newFilters);
+    setFilters(prev => ({ ...prev, ...newFilters }));
   };
 
-  // Manual submission handler
   const handleManualSubmit = async (e) => {
     e.preventDefault();
     if (!manualUrl.trim()) return;
 
-    setManualSubmitStatus({ type: 'loading', message: 'Adding listing...' });
+    setManualStatus({ type: 'loading', message: 'Adding...' });
 
     try {
+      const formData = new FormData();
+      formData.append('url', manualUrl.trim());
+
       const response = await fetch(`${API_URL}/submit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: manualUrl.trim() }),
+        body: formData,
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Failed to add listing');
+        throw new Error(data.detail || 'Failed to add');
       }
 
-      setManualSubmitStatus({ 
+      setManualStatus({ 
         type: 'success', 
-        message: `✅ Added: ${data.title || 'Listing'} (Accuracy: ${data.accuracy_score}%)` 
+        message: `✅ Added! It will appear in search results.` 
       });
       setManualUrl('');
-      
-      // Refresh search to show new listing
-      if (filters.q) {
-        handleSearch(filters.q);
-      }
-      
-      setTimeout(() => setManualSubmitStatus(null), 5000);
+      setTimeout(() => setManualStatus(null), 4000);
     } catch (err) {
-      setManualSubmitStatus({ type: 'error', message: `❌ ${err.message}` });
-      setTimeout(() => setManualSubmitStatus(null), 5000);
+      setManualStatus({ type: 'error', message: `❌ ${err.message}` });
+      setTimeout(() => setManualStatus(null), 4000);
     }
-  };
-
-  // Get source badge color
-  const getSourceColor = (source) => {
-    const colors = {
-      'Carsales': '#dbeafe',
-      'eBay Australia': '#fce7f3',
-      'Gumtree': '#dcfce7',
-      'Facebook Marketplace': '#fef3c7',
-      'Manual Submission': '#e0e7ff',
-      'Sample Data': '#f3f4f6'
-    };
-    return colors[source] || '#f3f4f6';
-  };
-
-  // Get API status icon
-  const getStatusIcon = () => {
-    if (apiStatus === 'connected') return '🟢';
-    if (apiStatus === 'checking') return '🟡';
-    return '🔴';
   };
 
   return (
     <div className="app">
       <Head>
-        <title>CarMates - Find Your Perfect Car</title>
-        <meta name="description" content="Search cars across Australia" />
+        <title>CarMates - Real Australian Car Listings</title>
+        <meta name="description" content="Search real cars from eBay, Carsales, Facebook Marketplace" />
       </Head>
 
       <header className="app-header">
         <div className="header-content">
           <h1>🚗 CarMates</h1>
-          <p>Find your perfect car across Australia</p>
+          <p>Real listings from eBay, Carsales & Facebook Marketplace</p>
           
-          {/* API Status Dashboard */}
-          <div className="api-dashboard">
-            <div className="api-status-badge">
-              {getStatusIcon()} Backend: {apiStatus === 'connected' ? 'Connected' : apiStatus === 'checking' ? 'Checking...' : 'Offline'}
-            </div>
-            
-            {apiDetails && apiDetails.sources && (
-              <div className="sources-status">
-                {Object.entries(apiDetails.sources).map(([name, active]) => (
-                  <span 
-                    key={name} 
-                    className={`source-pill ${active ? 'active' : 'inactive'}`}
-                    title={active ? 'Working' : 'Not configured'}
-                  >
-                    {active ? '✓' : '✗'} {name.replace('_', ' ')}
-                  </span>
-                ))}
-              </div>
+          {/* API Status Bar */}
+          <div className="status-bar">
+            <span className={`status-dot ${apiStatus}`}></span>
+            <span className="status-text">
+              {apiStatus === 'connected' ? 'Live Data' : apiStatus === 'checking' ? 'Connecting...' : 'Offline'}
+            </span>
+            {apiDetails?.sources_configured && (
+              <span className="sources-configured">
+                {Object.entries(apiDetails.sources_configured)
+                  .filter(([_, v]) => v)
+                  .map(([k]) => k.replace('_', ' '))
+                  .join(' • ')}
+              </span>
             )}
           </div>
         </div>
       </header>
 
       <main className="app-main">
-        {/* Manual Submission Form */}
-        <div className="manual-submit-section">
-          <h3>📎 Add Listing Manually</h3>
-          <p>Paste a Facebook Marketplace, Gumtree, or Carsales URL to add it to search results</p>
-          
-          <form onSubmit={handleManualSubmit} className="manual-form">
-            <div className="manual-input-wrapper">
-              <input
-                type="url"
-                value={manualUrl}
-                onChange={(e) => setManualUrl(e.target.value)}
-                placeholder="https://www.facebook.com/marketplace/item/1234567890"
-                className="manual-input"
-                required
-              />
-              <button 
-                type="submit" 
-                className="manual-submit-btn"
-                disabled={!manualUrl.trim() || (manualSubmitStatus?.type === 'loading')}
-              >
-                {manualSubmitStatus?.type === 'loading' ? 'Adding...' : '➕ Add Listing'}
-              </button>
-            </div>
-          </form>
-
-          {manualSubmitStatus && (
-            <div className={`submit-status ${manualSubmitStatus.type}`}>
-              {manualSubmitStatus.message}
-            </div>
-          )}
-        </div>
-
+        {/* Search Section */}
         <div className="search-section">
           <SearchBar onSearch={handleSearch} loading={loading} />
           <FilterPanel filters={filters} onFilterChange={handleFilterChange} />
         </div>
 
-        {/* Active Sources Bar */}
-        {sources.length > 0 && (
-          <div className="active-sources-bar">
-            <span className="sources-label">Data from:</span>
-            {sources.map(source => (
-              <span 
-                key={source} 
-                className="active-source-tag"
-                style={{ background: getSourceColor(source) }}
-              >
-                {source === 'Facebook Marketplace' && '⚠️ '}
-                {source === 'Manual Submission' && '✅ '}
-                {source}
-              </span>
-            ))}
-            <span className="results-meta">
+        {/* Results Meta */}
+        {sources.length > 0 && !loading && (
+          <div className="results-meta-bar">
+            <div className="source-tags">
+              {sources.map(source => (
+                <span key={source} className={`source-tag tag-${source.toLowerCase().replace(/\s+/g, '-')}`}>
+                  {source === 'Manual' && '✅ '}
+                  {source === 'Facebook Marketplace' && '⚠️ '}
+                  {source}
+                </span>
+              ))}
+            </div>
+            <div className="results-count">
               {totalResults} results • {searchTime}ms
-            </span>
+            </div>
           </div>
         )}
 
+        {/* Toggle Manual Form */}
+        <button 
+          className="toggle-manual-btn"
+          onClick={() => setShowManualForm(!showManualForm)}
+        >
+          {showManualForm ? '− Hide' : '+ Add Listing Manually'}
+        </button>
+
+        {/* Manual Form (Collapsible) */}
+        {showManualForm && (
+          <div className="manual-form-panel">
+            <p className="manual-hint">Paste a Facebook Marketplace, Carsales, or eBay listing URL</p>
+            <form onSubmit={handleManualSubmit}>
+              <div className="manual-input-row">
+                <input
+                  type="url"
+                  value={manualUrl}
+                  onChange={(e) => setManualUrl(e.target.value)}
+                  placeholder="https://www.facebook.com/marketplace/item/1234567890"
+                  className="manual-input"
+                  required
+                />
+                <button type="submit" className="manual-submit-btn" disabled={manualStatus?.type === 'loading'}>
+                  {manualStatus?.type === 'loading' ? 'Adding...' : 'Add'}
+                </button>
+              </div>
+            </form>
+            {manualStatus && (
+              <div className={`manual-status ${manualStatus.type}`}>
+                {manualStatus.message}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Results */}
         <ResultsGrid 
           results={results} 
           loading={loading} 
-          error={error} 
+          error={error}
+          sources={sources}
         />
       </main>
 
       <footer className="app-footer">
-        <p>© 2026 CarMates. Data from Facebook Marketplace, eBay, Gumtree, Carsales & manual submissions.</p>
+        <p>© 2026 CarMates. Real data only — no mockups.</p>
       </footer>
 
-      {/* Add these styles */}
-      <style jsx>{`
-        .api-dashboard {
-          margin-top: 1rem;
-          padding: 0.75rem;
+      <style jsx global>{`
+        .status-bar {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          margin-top: 0.75rem;
+          padding: 0.5rem 1rem;
           background: rgba(255,255,255,0.15);
-          border-radius: 12px;
-          backdrop-filter: blur(10px);
+          border-radius: 999px;
+          display: inline-flex;
         }
         
-        .api-status-badge {
+        .status-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #ef4444;
+        }
+        
+        .status-dot.connected {
+          background: #22c55e;
+          animation: pulse 2s infinite;
+        }
+        
+        .status-dot.checking {
+          background: #fbbf24;
+        }
+        
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        
+        .status-text {
           font-size: 0.875rem;
           font-weight: 600;
-          margin-bottom: 0.5rem;
         }
         
-        .sources-status {
+        .sources-configured {
+          font-size: 0.75rem;
+          opacity: 0.8;
+          margin-left: 0.5rem;
+          padding-left: 0.5rem;
+          border-left: 1px solid rgba(255,255,255,0.3);
+        }
+        
+        .results-meta-bar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0.75rem 1rem;
+          background: white;
+          border-radius: 8px;
+          margin-bottom: 1rem;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          flex-wrap: wrap;
+          gap: 0.5rem;
+        }
+        
+        .source-tags {
           display: flex;
           gap: 0.5rem;
           flex-wrap: wrap;
-          justify-content: center;
         }
         
-        .source-pill {
+        .source-tag {
           font-size: 0.75rem;
-          padding: 0.25rem 0.5rem;
+          padding: 0.25rem 0.75rem;
           border-radius: 999px;
-          background: rgba(255,255,255,0.2);
-          color: white;
+          font-weight: 600;
         }
         
-        .source-pill.active {
-          background: rgba(34, 197, 94, 0.3);
-        }
+        .tag-ebay-australia { background: #fce7f3; color: #9d174d; }
+        .tag-carsales { background: #dbeafe; color: #1e40af; }
+        .tag-facebook-marketplace { background: #fef3c7; color: #92400e; }
+        .tag-manual { background: #e0e7ff; color: #3730a3; }
         
-        .source-pill.inactive {
-          background: rgba(239, 68, 68, 0.2);
-          opacity: 0.7;
-        }
-        
-        .manual-submit-section {
-          background: linear-gradient(135deg, #1e293b, #334155);
-          color: white;
-          padding: 1.5rem;
-          border-radius: 12px;
-          margin-bottom: 2rem;
-        }
-        
-        .manual-submit-section h3 {
-          margin-bottom: 0.25rem;
-          font-size: 1.1rem;
-        }
-        
-        .manual-submit-section p {
-          opacity: 0.8;
+        .results-count {
           font-size: 0.875rem;
+          color: #64748b;
+          margin-left: auto;
+        }
+        
+        .toggle-manual-btn {
+          background: transparent;
+          border: 2px dashed #cbd5e1;
+          color: #64748b;
+          padding: 0.5rem 1rem;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 0.875rem;
+          font-weight: 600;
           margin-bottom: 1rem;
+          width: 100%;
+          transition: all 0.2s;
         }
         
-        .manual-form {
-          display: flex;
-          gap: 0.5rem;
+        .toggle-manual-btn:hover {
+          border-color: #2563eb;
+          color: #2563eb;
         }
         
-        .manual-input-wrapper {
+        .manual-form-panel {
+          background: #f8fafc;
+          border: 2px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 1.5rem;
+          margin-bottom: 1.5rem;
+        }
+        
+        .manual-hint {
+          font-size: 0.875rem;
+          color: #64748b;
+          margin-bottom: 0.75rem;
+        }
+        
+        .manual-input-row {
           display: flex;
-          flex: 1;
           gap: 0.5rem;
         }
         
         .manual-input {
           flex: 1;
           padding: 0.75rem;
-          border: 2px solid rgba(255,255,255,0.2);
+          border: 1px solid #e2e8f0;
           border-radius: 8px;
-          background: rgba(255,255,255,0.1);
-          color: white;
           font-size: 0.875rem;
         }
         
-        .manual-input::placeholder {
-          color: rgba(255,255,255,0.5);
-        }
-        
         .manual-submit-btn {
-          background: #22c55e;
+          background: #2563eb;
           color: white;
           border: none;
           padding: 0.75rem 1.5rem;
           border-radius: 8px;
           font-weight: 600;
           cursor: pointer;
-          white-space: nowrap;
         }
         
         .manual-submit-btn:disabled {
           opacity: 0.6;
-          cursor: not-allowed;
         }
         
-        .submit-status {
+        .manual-status {
           margin-top: 0.75rem;
           padding: 0.75rem;
           border-radius: 8px;
           font-size: 0.875rem;
         }
         
-        .submit-status.success {
+        .manual-status.success {
           background: #dcfce7;
           color: #166534;
         }
         
-        .submit-status.error {
+        .manual-status.error {
           background: #fef2f2;
           color: #dc2626;
         }
         
-        .submit-status.loading {
+        .manual-status.loading {
           background: #fef3c7;
           color: #92400e;
-        }
-        
-        .active-sources-bar {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          margin-bottom: 1rem;
-          padding: 0.75rem;
-          background: white;
-          border-radius: 8px;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-          flex-wrap: wrap;
-        }
-        
-        .sources-label {
-          font-size: 0.875rem;
-          color: #64748b;
-          font-weight: 500;
-        }
-        
-        .active-source-tag {
-          font-size: 0.75rem;
-          padding: 0.25rem 0.75rem;
-          border-radius: 999px;
-          font-weight: 600;
-          color: #1e293b;
-        }
-        
-        .results-meta {
-          margin-left: auto;
-          font-size: 0.75rem;
-          color: #64748b;
         }
       `}</style>
     </div>
