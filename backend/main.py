@@ -7,6 +7,9 @@ from fastapi import FastAPI, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from scraper.cache import SearchCache
+from scraper.facebook import scrape_facebook_marketplace
+
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://carmates-scraper.pages.dev")
 PORT = int(os.getenv("PORT", "8080"))
 
@@ -34,6 +37,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+cache = SearchCache(ttl_minutes=15)
 
 # Sample data that actually works
 SAMPLE_CARS = [
@@ -124,22 +129,47 @@ async def search_cars(
     location: str = Query(default=""),
     limit: int = Query(default=10, ge=1, le=50)
 ):
-    results = SAMPLE_CARS.copy()
-    
+    cache_key = {"q": q, "location": location, "limit": limit}
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return {
+            "query": q,
+            "results": cached,
+            "total": len(cached),
+            "search_time_ms": 0,
+            "sources": ["Facebook Marketplace"],
+            "dev_mode": False,
+            "cached": True
+        }
+
+    results = []
     if q:
-        q_lower = q.lower()
-        results = [c for c in results if q_lower in c.title.lower() or q_lower in c.make.lower()]
-    
-    if location:
-        results = [c for c in results if location.lower() in c.location.lower()]
-    
+        results = scrape_facebook_marketplace(q, location, limit)
+
+    if not results:
+        results = SAMPLE_CARS.copy()
+        if q:
+            q_lower = q.lower()
+            results = [c for c in results if q_lower in c.title.lower() or q_lower in c.make.lower()]
+        if location:
+            results = [c for c in results if location.lower() in c.location.lower()]
+
+    serialized_results = []
+    for item in results:
+        if hasattr(item, 'dict') and callable(getattr(item, 'dict')):
+            serialized_results.append(item.dict())
+        else:
+            serialized_results.append(item)
+
+    cache.set(cache_key, serialized_results)
+
     return {
         "query": q,
-        "results": results[:limit],
-        "total": len(results[:limit]),
+        "results": serialized_results[:limit],
+        "total": len(serialized_results[:limit]),
         "search_time_ms": 0,
-        "sources": ["Sample Data"],
-        "dev_mode": True
+        "sources": ["Facebook Marketplace"] if q else ["Sample Data"],
+        "dev_mode": False
     }
 
 @app.post("/submit")
