@@ -25,39 +25,56 @@ export default function Home() {
       .catch(() => setApiStatus('error'));
   }, []);
 
-  const handleSearch = async () => {
-    if (!query.trim()) return;
-    
+  // Replaced search handler:
+const handleSearch = async () => {
     setLoading(true);
-    setHasSearched(true);
     setResults([]);
-    
     try {
-      const params = new URLSearchParams({
-        q: query.trim(),
-        location: location,
-        limit: '20'
-      });
-      
-      console.log('Fetching:', `${API_URL}/search?${params}`);
-      
-      const res = await fetch(`${API_URL}/search?${params}`);
-      const data = await res.json();
-      
-      console.log('Response:', data);
-      
-      if (data.results && Array.isArray(data.results)) {
-        setResults(data.results);
-      } else {
-        setResults([]);
-      }
+        // Step 1: Queue scrape job
+        const { task_id } = await startScrape({
+            query: searchQuery,
+            location: selectedLocation,  // "sydney", "melbourne", etc.
+            limit: 20,
+            // email/password optional for auto-login
+        });
+        
+        setTaskId(task_id);
+        
+        // Step 2: Poll for completion
+        const pollInterval = setInterval(async () => {
+            const status = await getScrapeStatus(task_id);
+            
+            if (status.status === 'SUCCESS') {
+                clearInterval(pollInterval);
+                // Step 3: Fetch results from database
+                const listings = await getListings({ search: searchQuery });
+                setResults(listings.listings);
+                setLoading(false);
+            } else if (status.status === 'FAILURE') {
+                clearInterval(pollInterval);
+                setError('Scraping failed. Facebook may require login.');
+                setLoading(false);
+            }
+            // else: PENDING/STARTED — keep polling
+        }, 3000);
+        
     } catch (err) {
-      console.error('Search error:', err);
-      setResults([]);
-    } finally {
-      setLoading(false);
+        setError(err.message);
+        setLoading(false);
     }
-  };
+};
+
+// Added WebSocket connection for progress:
+useEffect(() => {
+    const ws = new WebSocket(`wss://${API_URL.replace('https://', '')}/ws/progress`);
+    ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'scrape_done') {
+            setProgress(`Scraped ${msg.count} listings`);
+        }
+    };
+    return () => ws.close();
+}, []);
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') handleSearch();
