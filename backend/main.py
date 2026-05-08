@@ -1,185 +1,195 @@
-# backend/main.py
-import os
-import re
-from datetime import datetime
-from typing import Optional, List
-from fastapi import FastAPI, Query, Form
+from fastapi import FastAPI, Depends, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from typing import Optional, List
+import json
+import pandas as pd
+from io import BytesIO
+from fastapi.responses import StreamingResponse
+from .database import engine, get_db, Base
+from .models import CarListing
+from .scraper.facebook import FacebookMarketplaceScraper
+from .celery_app import celery_app
+from .tasks import scrape_marketplace_task
+import logging
 
-from scraper.cache import SearchCache
-from scraper.facebook import scrape_facebook_marketplace
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://carmates-scraper.pages.dev")
-PORT = int(os.getenv("PORT", "8080"))
-
-class CarListing(BaseModel):
-    id: str
-    title: str
-    price: Optional[float] = None
-    year: Optional[int] = None
-    make: str
-    model: str
-    odometer: Optional[int] = None
-    location: str
-    source: str
-    url: str
-    images: List[str] = []
-    scraped_at: str
-    accuracy_score: int = 0
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+origins = [
+    "https://carmates-scraper.pages.dev",
+    "https://carmates-scraper.pages.dev/*",
+    "http://localhost:3000",
+    "http://localhost:8000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", FRONTEND_URL, "https://carmates-scraper.pages.dev"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-cache = SearchCache(ttl_minutes=15)
+class ScrapeRequest(BaseModel):
+    query: str
+    location: Optional[str] = None
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    min_year: Optional[int] = None
+    max_year: Optional[int] = None
+    condition: Optional[str] = None
+    limit: int = 50
+    email: Optional[str] = None
+    password: Optional[str] = None
 
-# Sample data that actually works
-SAMPLE_CARS = [
-    CarListing(
-        id="sample-1",
-        title="2022 Toyota Camry Ascent Sport Auto",
-        price=28990,
-        year=2022,
-        make="Toyota",
-        model="Camry",
-        odometer=42000,
-        location="Sydney, NSW",
-        source="Carsales",
-        url="https://www.carsales.com.au/cars/details/2022-toyota-camry-ascent-sport",
-        images=["https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?w=400"],
-        scraped_at=datetime.utcnow().isoformat(),
-        accuracy_score=92
-    ),
-    CarListing(
-        id="sample-2",
-        title="2021 Mazda CX-5 Maxx Sport Auto AWD",
-        price=32990,
-        year=2021,
-        make="Mazda",
-        model="CX-5",
-        odometer=35000,
-        location="Melbourne, VIC",
-        source="eBay Australia",
-        url="https://www.ebay.com.au/itm/2021-mazda-cx-5-maxx-sport",
-        images=["https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=400"],
-        scraped_at=datetime.utcnow().isoformat(),
-        accuracy_score=88
-    ),
-    CarListing(
-        id="sample-3",
-        title="2020 Toyota RAV4 GX Auto 2WD",
-        price=26900,
-        year=2020,
-        make="Toyota",
-        model="RAV4",
-        odometer=58000,
-        location="Brisbane, QLD",
-        source="Facebook Marketplace",
-        url="https://www.facebook.com/marketplace/item/1234567890",
-        images=["https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=400"],
-        scraped_at=datetime.utcnow().isoformat(),
-        accuracy_score=75
-    ),
-    CarListing(
-        id="sample-4",
-        title="2023 Hyundai i30 N Line Premium Auto",
-        price=31500,
-        year=2023,
-        make="Hyundai",
-        model="i30",
-        odometer=18000,
-        location="Perth, WA",
-        source="Gumtree",
-        url="https://www.gumtree.com.au/s-ad/perth/2023-hyundai-i30-n-line",
-        images=["https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400"],
-        scraped_at=datetime.utcnow().isoformat(),
-        accuracy_score=85
-    ),
-    CarListing(
-        id="sample-5",
-        title="2023 BMW X3 xDrive20d Auto",
-        price=78900,
-        year=2023,
-        make="BMW",
-        model="X3",
-        odometer=12000,
-        location="Sydney, NSW",
-        source="Carsales",
-        url="https://www.carsales.com.au/cars/details/2023-bmw-x3-xdrive20d",
-        images=["https://images.unsplash.com/photo-1555215695-3004980adade?w=400"],
-        scraped_at=datetime.utcnow().isoformat(),
-        accuracy_score=96
-    ),
-]
+class ScheduledJob(BaseModel):
+    cron_expression: str
+    request: ScrapeRequest
+    enabled: bool = True
 
-@app.get("/health")
-async def health_check():
-    return {"status": "ok", "version": "4.1.1", "mode": "sample-data"}
+scheduled_jobs = []
 
-@app.get("/search")
-async def search_cars(
-    q: str = Query(default=""),
-    location: str = Query(default=""),
-    limit: int = Query(default=10, ge=1, le=50)
-):
-    cache_key = {"q": q, "location": location, "limit": limit}
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return {
-            "query": q,
-            "results": cached,
-            "total": len(cached),
-            "search_time_ms": 0,
-            "sources": ["Facebook Marketplace"],
-            "dev_mode": False,
-            "cached": True
-        }
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except:
+                pass
 
-    results = []
-    if q:
-        results = scrape_facebook_marketplace(q, location, limit)
+manager = ConnectionManager()
 
-    if not results:
-        results = SAMPLE_CARS.copy()
-        if q:
-            q_lower = q.lower()
-            results = [c for c in results if q_lower in c.title.lower() or q_lower in c.make.lower()]
-        if location:
-            results = [c for c in results if location.lower() in c.location.lower()]
+@app.websocket("/ws/progress")
+async def websocket_progress(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
-    serialized_results = []
-    for item in results:
-        if hasattr(item, 'dict') and callable(getattr(item, 'dict')):
-            serialized_results.append(item.dict())
+@app.post("/scrape")
+async def scrape_and_store(request: ScrapeRequest):
+    task = scrape_marketplace_task.delay(request.dict())
+    return {"task_id": task.id, "status": "queued"}
+
+@app.get("/scrape/status/{task_id}")
+def get_task_status(task_id: str):
+    result = celery_app.AsyncResult(task_id)
+    return {"task_id": task_id, "status": result.status, "result": result.result if result.ready() else None}
+
+@app.post("/scrape/sync")
+async def scrape_sync(request: ScrapeRequest, db: Session = Depends(get_db)):
+    async with FacebookMarketplaceScraper() as scraper:
+        if request.email and request.password:
+            await scraper.login(email=request.email, password=request.password)
         else:
-            serialized_results.append(item)
+            await scraper.login()
+        results = await scraper.scrape_marketplace(
+            query=request.query,
+            location=request.location,
+            min_price=request.min_price,
+            max_price=request.max_price,
+            min_year=request.min_year,
+            max_year=request.max_year,
+            condition=request.condition,
+            limit=request.limit,
+        )
+        for item in results:
+            existing = db.query(CarListing).filter(CarListing.facebook_id == item.get("facebook_id")).first()
+            if existing:
+                for key, value in item.items():
+                    if value is not None and hasattr(existing, key):
+                        setattr(existing, key, value)
+            else:
+                new_listing = CarListing(**item)
+                db.add(new_listing)
+        db.commit()
+        await manager.broadcast(json.dumps({"type": "scrape_done", "count": len(results)}))
+    return {"stored": len(results)}
 
-    cache.set(cache_key, serialized_results)
+@app.get("/listings")
+def get_listings(skip: int = 0, limit: int = 100, min_price: Optional[float] = None,
+                max_price: Optional[float] = None, make: Optional[str] = None,
+                search: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(CarListing)
+    if min_price:
+        query = query.filter(CarListing.price >= min_price)
+    if max_price:
+        query = query.filter(CarListing.price <= max_price)
+    if make:
+        query = query.filter(CarListing.make.ilike(f"%{make}%"))
+    if search:
+        query = query.filter(
+            (CarListing.title.ilike(f"%{search}%")) | (CarListing.description.ilike(f"%{search}%"))
+        )
+    total = query.count()
+    listings = query.offset(skip).limit(limit).all()
+    return {"total": total, "listings": listings}
 
-    return {
-        "query": q,
-        "results": serialized_results[:limit],
-        "total": len(serialized_results[:limit]),
-        "search_time_ms": 0,
-        "sources": ["Facebook Marketplace"] if q else ["Sample Data"],
-        "dev_mode": False
-    }
+@app.get("/export/csv")
+def export_csv(db: Session = Depends(get_db)):
+    listings = db.query(CarListing).all()
+    data = [{
+        "facebook_id": l.facebook_id,
+        "title": l.title,
+        "price": l.price,
+        "currency": l.currency,
+        "year": l.year,
+        "odometer": l.odometer,
+        "odometer_unit": l.odometer_unit,
+        "location": l.location,
+        "listing_url": l.listing_url,
+        "scrape_timestamp": l.scrape_timestamp
+    } for l in listings]
+    df = pd.DataFrame(data)
+    stream = BytesIO()
+    df.to_csv(stream, index=False)
+    response = StreamingResponse(iter([stream.getvalue()]), media_type="text/csv")
+    response.headers["Content-Disposition"] = "attachment; filename=listings.csv"
+    return response
 
-@app.post("/submit")
-async def submit_manual(url: str = Form(...)):
-    return {"status": "received", "url": url}
+@app.get("/export/excel")
+def export_excel(db: Session = Depends(get_db)):
+    listings = db.query(CarListing).all()
+    data = [{
+        "facebook_id": l.facebook_id,
+        "title": l.title,
+        "price": l.price,
+        "currency": l.currency,
+        "year": l.year,
+        "odometer": l.odometer,
+        "odometer_unit": l.odometer_unit,
+        "location": l.location,
+        "listing_url": l.listing_url,
+        "scrape_timestamp": l.scrape_timestamp
+    } for l in listings]
+    df = pd.DataFrame(data)
+    stream = BytesIO()
+    with pd.ExcelWriter(stream, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Listings")
+    response = StreamingResponse(iter([stream.getvalue()]), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response.headers["Content-Disposition"] = "attachment; filename=listings.xlsx"
+    return response
 
-@app.get("/")
-async def root():
-    return {"message": "CarMates API", "search": "/search?q=toyota"}
+@app.post("/scheduled_jobs")
+def add_scheduled_job(job: ScheduledJob):
+    scheduled_jobs.append(job.dict())
+    return {"status": "added", "jobs": scheduled_jobs}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+@app.get("/scheduled_jobs")
+def list_scheduled_jobs():
+    return {"jobs": scheduled_jobs}
