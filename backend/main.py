@@ -7,11 +7,14 @@ import json
 import pandas as pd
 from io import BytesIO
 from fastapi.responses import StreamingResponse
-from .database import engine, get_db, Base
-from .models import CarListing
-from .scraper.facebook import FacebookMarketplaceScraper
-from .celery_app import celery_app
-from .tasks import scrape_marketplace_task
+
+# FIXED: Changed from relative to absolute imports
+from database import engine, get_db, Base
+from models import CarListing
+from scraper.facebook import FacebookMarketplaceScraper
+from celery_app import celery_app
+from tasks import scrape_marketplace_task
+
 import logging
 
 logging.basicConfig(level=logging.INFO)
