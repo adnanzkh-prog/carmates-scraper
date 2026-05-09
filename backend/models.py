@@ -7,7 +7,7 @@ class CarListing(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     facebook_id = Column(String, unique=True, index=True)
-    title = Column(String)
+    title = Column(String, index=True)  # Added index=True for search performance
     price = Column(Float, nullable=True)
     currency = Column(String, default="AUD")
     year = Column(Integer, nullable=True)
@@ -27,5 +27,6 @@ class CarListing(Base):
         Index("idx_price", "price"),
         Index("idx_year", "year"),
         Index("idx_location", "location"),
-        Index("idx_ft_search", "title", "description", postgresql_using="gin"),
+        # REMOVED: GIN index that requires pg_trgm extension
+        # Use regular B-tree index on title instead (added index=True above)
     )
