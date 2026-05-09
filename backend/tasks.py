@@ -4,33 +4,45 @@ from database import SessionLocal
 from models import CarListing
 import asyncio
 import logging
-from asgiref.sync import async_to_sync
 
 logger = logging.getLogger(__name__)
 
-async def do_scrape(scrape_request):
-    async with FacebookMarketplaceScraper() as scraper:
-        await scraper.login(
-            email=scrape_request.get("email"),
-            password=scrape_request.get("password")
-        )
-        results = await scraper.scrape_marketplace(
-            query=scrape_request["query"],
-            location=scrape_request.get("location"),
-            min_price=scrape_request.get("min_price"),
-            max_price=scrape_request.get("max_price"),
-            min_year=scrape_request.get("min_year"),
-            max_year=scrape_request.get("max_year"),
-            condition=scrape_request.get("condition"),
-            limit=scrape_request.get("limit", 50),
-        )
-        return results
-
 @celery_app.task(bind=True)
 def scrape_marketplace_task(self, scrape_request: dict):
-    # Run async function in sync context
-    listings = async_to_sync(do_scrape)(scrape_request)
+    async def _run():
+        scraper = FacebookMarketplaceScraper()
+        try:
+            # Manually enter the async context
+            await scraper.__aenter__()
+            
+            await scraper.login(
+                email=scrape_request.get("email"),
+                password=scrape_request.get("password")
+            )
+            results = await scraper.scrape_marketplace(
+                query=scrape_request["query"],
+                location=scrape_request.get("location"),
+                min_price=scrape_request.get("min_price"),
+                max_price=scrape_request.get("max_price"),
+                min_year=scrape_request.get("min_year"),
+                max_year=scrape_request.get("max_year"),
+                condition=scrape_request.get("condition"),
+                limit=scrape_request.get("limit", 50),
+            )
+            return results
+        finally:
+            # Manually exit the async context
+            await scraper.__aexit__(None, None, None)
 
+    # Create and run event loop manually
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        listings = loop.run_until_complete(_run())
+    finally:
+        loop.close()
+
+    # Store results in database
     db = SessionLocal()
     try:
         for item in listings:
