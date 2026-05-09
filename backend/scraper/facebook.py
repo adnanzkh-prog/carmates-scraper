@@ -17,26 +17,30 @@ class FacebookMarketplaceScraper:
         self.playwright = None
         self.current_retry = 0
 
-    async def __aenter__(self):
-        self.playwright = await async_playwright().start()
-        launch_options = {
-            "headless": settings.PLAYWRIGHT_HEADLESS,
-            "args": [
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-dev-shm-usage"
-            ]
-        }
-        if self.proxy:
-            launch_options["proxy"] = {"server": self.proxy}
-        self.browser = await self.playwright.chromium.launch(**launch_options)
-        context = await self.browser.new_context(
-            viewport={"width": random.randint(1200, 1920), "height": random.randint(800, 1080)},
-            user_agent=random.choice(settings.USER_AGENTS)
-        )
-        self.page = await context.new_page()
-        await stealth_async(self.page)
-        return self
+async def __aenter__(self):
+    self.playwright = await async_playwright().start()
+    launch_options = {
+        "headless": True,  # ← FORCE HEADLESS
+        "args": [
+            "--disable-blink-features=AutomationControlled",
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--disable-web-security",
+            "--disable-features=IsolateOrigins,site-per-process",
+        ]
+    }
+    if self.proxy:
+        launch_options["proxy"] = {"server": self.proxy}
+    self.browser = await self.playwright.chromium.launch(**launch_options)
+    context = await self.browser.new_context(
+        viewport={"width": random.randint(1200, 1920), "height": random.randint(800, 1080)},
+        user_agent=random.choice(settings.USER_AGENTS)
+    )
+    self.page = await context.new_page()
+    await stealth_async(self.page)
+    return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self.browser:
