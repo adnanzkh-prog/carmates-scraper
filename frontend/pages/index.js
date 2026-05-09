@@ -62,35 +62,12 @@ export default function Home() {
     const [error, setError] = useState('');
     const [progress, setProgress] = useState('');
     const pollRef = useRef(null);
-    const wsRef = useRef(null);
 
     // ─── Check backend health on mount ───
     useEffect(() => {
         checkBackendHealth()
             .then(ok => setApiStatus(ok ? 'connected' : 'error'))
             .catch(() => setApiStatus('error'));
-    }, []);
-
-    // ─── WebSocket for real-time progress ───
-    useEffect(() => {
-        const wsUrl = API_URL.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
-        const ws = new WebSocket(`${wsUrl}/ws/progress`);
-        
-        ws.onopen = () => console.log('WebSocket connected');
-        ws.onmessage = (event) => {
-            try {
-                const msg = JSON.parse(event.data);
-                if (msg.type === 'scrape_done') {
-                    setProgress(`✅ Scraped ${msg.count} listings`);
-                }
-            } catch (e) {
-                console.log('WS message:', event.data);
-            }
-        };
-        ws.onerror = (e) => console.log('WebSocket error:', e);
-        
-        wsRef.current = ws;
-        return () => ws.close();
     }, []);
 
     // ─── Cleanup poll interval on unmount ───
@@ -156,8 +133,10 @@ export default function Home() {
                         setLoading(false);
                         setProgress('');
                         
-                    } else if (status.status === 'STARTED' || status.status === 'PENDING') {
-                        setProgress(`Scraping in progress... (${status.status})`);
+                    } else if (status.status === 'STARTED') {
+                        setProgress('🔄 Scraping in progress... (this may take 30-60 seconds)');
+                    } else if (status.status === 'PENDING') {
+                        setProgress('⏳ Job pending in queue...');
                     }
                 } catch (pollErr) {
                     console.error('Poll error:', pollErr);
