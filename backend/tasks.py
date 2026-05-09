@@ -1,4 +1,4 @@
-from celery_app import celery_app  # ← CHANGE THIS
+from celery_app import celery_app
 from scraper.facebook import FacebookMarketplaceScraper
 from database import SessionLocal
 from models import CarListing
@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-@celery_app.task(bind=True)  # ← CHANGE THIS (not @shared_task)
+@celery_app.task(bind=True)
 def scrape_marketplace_task(self, scrape_request: dict):
     async def _run():
         async with FacebookMarketplaceScraper() as scraper:
