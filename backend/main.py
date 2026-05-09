@@ -26,7 +26,6 @@ app = FastAPI()
 
 origins = [
     "https://carmates-scraper.pages.dev",
-    "https://carmates-scraper.pages.dev/*",
     "http://localhost:3000",
     "http://localhost:8000",
 ]
