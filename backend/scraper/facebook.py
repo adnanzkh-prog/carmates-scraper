@@ -7,7 +7,7 @@ from typing import List, Dict, Optional, Any
 from datetime import datetime
 from playwright.async_api import async_playwright, Page, Browser
 from playwright_stealth import stealth_async
-from ..config import settings
+from config import settings
 
 class FacebookMarketplaceScraper:
     def __init__(self, proxy: Optional[str] = None):
