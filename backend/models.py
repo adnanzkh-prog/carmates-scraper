@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean, Index
 from datetime import datetime
-from .database import Base
+from database import Base
 
 class CarListing(Base):
     __tablename__ = "car_listings"
