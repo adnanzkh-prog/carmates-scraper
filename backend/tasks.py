@@ -1,7 +1,7 @@
 from celery import shared_task
-from .scraper.facebook import FacebookMarketplaceScraper
-from .database import SessionLocal
-from .models import CarListing
+from scraper.facebook import FacebookMarketplaceScraper
+from database import SessionLocal
+from models import CarListing
 import asyncio
 import logging
 
