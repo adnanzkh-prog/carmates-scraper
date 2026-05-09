@@ -1,21 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: 'export',           // ← ADD THIS for static site generation
+  distDir: 'dist',            // ← ADD THIS (Cloudflare Pages default)
   images: {
+    unoptimized: true,        // ← ADD THIS (required for static export)
     domains: ['images.unsplash.com', 'carsales.pxcrush.net', 'gumtree.com.au'],
   },
-  async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-        ],
-      },
-    ];
-  },
+  // REMOVED: headers() doesn't work with static export
 };
 
 module.exports = nextConfig;
