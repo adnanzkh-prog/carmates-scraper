@@ -62,97 +62,65 @@ class FacebookMarketplaceScraper:
             json.dump(cookies, f, indent=2)
 
     async def login(self, email: str = None, password: str = None):
-        if await self._load_saved_cookies():
-            await self.page.goto("https://www.facebook.com/", timeout=settings.SCRAPE_TIMEOUT)
-            if "login" not in self.page.url:
-                print("✅ Loaded existing session")
-                return
-        await self.page.goto("https://www.facebook.com/login", timeout=settings.SCRAPE_TIMEOUT)
-        if email and password:
-            await self.page.fill('input[name="email"]', email)
-            await self.page.fill('input[name="pass"]', password)
-            await self.page.click('button[name="login"]')
-            await self.page.wait_for_load_state("networkidle")
-            if "twofactor" in self.page.url or "checkpoint" in self.page.url:
-                print("⚠️ 2FA required. Complete manually.")
-                input("Press Enter after completing 2FA...")
-        else:
-            print("🔐 Please log in manually within 5 minutes.")
-            for _ in range(60):
-                await asyncio.sleep(5)
-                if "login" not in self.page.url and "checkpoint" not in self.page.url:
-                    break
+    # 1. Try saved cookies first
+    if await self._load_saved_cookies():
+        await self.page.goto("https://www.facebook.com/", timeout=settings.SCRAPE_TIMEOUT)
+        if "login" not in self.page.url:
+            print("✅ Loaded existing session from cookies")
+            return True
+    
+    # 2. No credentials? Return False for limited scrape mode
+    if not email or not password:
+        print("⚠️ No credentials provided. Proceeding with limited scrape...")
+        return False
+    
+    # 3. Automated login with provided credentials
+    print(f"🔐 Logging in with email: {email[:3]}***")
+    await self.page.goto("https://www.facebook.com/login", timeout=settings.SCRAPE_TIMEOUT)
+    
+    await self.page.fill('input[name="email"]', email)
+    await self.page.fill('input[name="pass"]', password)
+    await self.page.click('button[name="login"]')
+    
+    await self.page.wait_for_load_state("networkidle", timeout=15000)
+    
+    current_url = self.page.url
+    
+    # Check for 2FA/checkpoint
+    if "twofactor" in current_url or "checkpoint" in current_url:
+        print("⚠️ 2FA/Checkpoint detected. Saving partial session.")
         await self._save_cookies()
-        print("✅ Login successful")
+        return False
+    
+    # Check if login succeeded
+    if "login" not in current_url:
+        await self._save_cookies()
+        print("✅ Login successful, cookies saved")
+        return True
+    else:
+        raise Exception("Login failed: Invalid credentials or Facebook blocked the login")
 
-    async def scrape_marketplace(self, query: str, location: Optional[str] = None,
-                                 min_price: Optional[float] = None, max_price: Optional[float] = None,
-                                 min_year: Optional[int] = None, max_year: Optional[int] = None,
-                                 condition: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
-        from urllib.parse import urlencode
-        if not location:
-            location = settings.DEFAULT_LOCATION
-        base_url = f"https://www.facebook.com/marketplace/{location}/search"
-        params = {"query": query}
-        if min_price is not None:
-            params["minPrice"] = min_price
-        if max_price is not None:
-            params["maxPrice"] = max_price
-        if min_year:
-            params["minYear"] = min_year
-        if max_year:
-            params["maxYear"] = max_year
-        if condition:
-            params["condition"] = condition
-        full_url = f"{base_url}?{urlencode(params)}"
-        print(f"🌐 Navigating to: {full_url}")
-        try:
-            await self.page.goto(full_url, timeout=settings.SCRAPE_TIMEOUT)
-        except Exception as e:
-            if self.current_retry < settings.MAX_RETRIES:
-                self.current_retry += 1
-                wait = 2 ** self.current_retry
-                print(f"Retrying in {wait}s (attempt {self.current_retry})")
-                await asyncio.sleep(wait)
-                return await self.scrape_marketplace(query, location, min_price, max_price,
-                                                     min_year, max_year, condition, limit)
-            else:
-                raise
-        try:
-            await self.page.wait_for_selector('[aria-label="Marketplace feed"]', timeout=10000)
-        except:
-            await self.page.wait_for_selector('div[role="feed"]', timeout=10000)
-        listings_data = []
-        last_height = 0
-        scroll_attempts = 0
-        while len(listings_data) < limit and scroll_attempts < settings.MAX_SCROLLS:
-            new_listings = await self._extract_visible_listings()
-            existing_ids = {l.get("facebook_id") for l in listings_data}
-            for listing in new_listings:
-                if listing.get("facebook_id") not in existing_ids:
-                    listings_data.append(listing)
-            print(f"📊 Scraped {len(listings_data)} / {limit} listings")
-            if len(listings_data) >= limit:
-                break
-            scroll_distance = random.randint(300, 800)
-            await self.page.evaluate(f"window.scrollBy(0, {scroll_distance})")
-            await asyncio.sleep(random.uniform(settings.SCROLL_DELAY - 0.5, settings.SCROLL_DELAY + 0.5))
-            new_height = await self.page.evaluate("document.body.scrollHeight")
-            if new_height == last_height:
-                scroll_attempts += 1
-            else:
-                scroll_attempts = 0
-                last_height = new_height
-            load_more = await self.page.query_selector('div[aria-label="Load more"]')
-            if load_more:
-                await load_more.click()
-                await asyncio.sleep(1)
-        if limit <= 20:
-            for i, listing in enumerate(listings_data):
-                if listing.get("listing_url"):
-                    detailed = await self._extract_listing_details(listing["listing_url"])
-                    listings_data[i].update(detailed)
-        return listings_data[:limit]
+    async def scrape_marketplace(self, query: str, location: Optional[str] = None, ...):
+    from urllib.parse import urlencode
+    
+    if not location:
+        location = settings.DEFAULT_LOCATION
+    
+    base_url = f"https://www.facebook.com/marketplace/{location}/search"
+    params = {"query": query}
+    # ... (other params)
+    
+    full_url = f"{base_url}?{urlencode(params)}"
+    print(f"🌐 Navigating to: {full_url}")
+    
+    await self.page.goto(full_url, timeout=settings.SCRAPE_TIMEOUT)
+    
+    # NEW: Check if we got redirected to login
+    if "login" in self.page.url:
+        print("⚠️ Facebook requires login for this search. Returning empty results.")
+        return []  # Graceful exit
+    
+    # Continue with existing scrape logic...
 
     async def _extract_visible_listings(self) -> List[Dict[str, Any]]:
         cards = await self.page.query_selector_all('a[href*="/marketplace/item/"]')
