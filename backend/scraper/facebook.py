@@ -102,7 +102,7 @@ class FacebookMarketplaceScraper:
         else:
             raise Exception("Login failed: Invalid credentials or Facebook blocked the login")
 
-    async def scrape_marketplace(
+        async def scrape_marketplace(
         self,
         query: str,
         location: Optional[str] = None,
@@ -110,7 +110,9 @@ class FacebookMarketplaceScraper:
         max_price: Optional[int] = None,
         min_year: Optional[int] = None,
         max_year: Optional[int] = None,
-        max_results: int = 20
+        condition: Optional[str] = None,   # ← ADD THIS
+        limit: int = 20,                    # ← ADD THIS (was max_results)
+        **kwargs                            # ← ADD THIS for future-proofing
     ) -> List[Dict[str, Any]]:
         if not location:
             location = settings.DEFAULT_LOCATION
