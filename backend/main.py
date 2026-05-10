@@ -87,20 +87,30 @@ async def websocket_progress(websocket: WebSocket):
 
 @app.post("/scrape")
 async def start_scrape(request: ScrapeRequest):
-    # Build the task payload with credentials
-    task_payload = request.dict()
+    # Build payload with credentials from request OR env vars as fallback
+    # Use .get() with default None to avoid KeyError if fields missing
+    email = request.email or os.getenv("FACEBOOK_EMAIL") or None
+    password = request.password or os.getenv("FACEBOOK_PASSWORD") or None
     
-    # Fallback to env vars if user didn't provide credentials
-    if not task_payload.get("email"):
-        task_payload["email"] = os.getenv("FACEBOOK_EMAIL")
-    if not task_payload.get("password"):
-        task_payload["password"] = os.getenv("FACEBOOK_PASSWORD")
+    task_payload = {
+        "query": request.query,
+        "location": request.location,
+        "min_price": request.min_price,
+        "max_price": request.max_price,
+        "min_year": request.min_year,
+        "max_year": request.max_year,
+        "condition": request.condition,
+        "limit": request.limit,
+        "email": email,        # None if not provided anywhere
+        "password": password,  # None if not provided anywhere
+    }
     
     task = scrape_marketplace_task.delay(task_payload)
+    
     return {
         "task_id": task.id,
         "status": "queued",
-        "has_credentials": bool(task_payload.get("email") and task_payload.get("password"))
+        "has_credentials": bool(email and password)
     }
 
 @app.get("/scrape/status/{task_id}")
