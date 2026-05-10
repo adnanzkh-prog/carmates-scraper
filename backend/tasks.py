@@ -4,38 +4,15 @@ from database import SessionLocal
 from models import CarListing
 import asyncio
 import logging
-import os
 
 logger = logging.getLogger(__name__)
+
 
 @celery_app.task(bind=True, max_retries=3)
 def scrape_marketplace_task(self, scrape_request: dict):
     async def _run():
-        scraper = FacebookMarketplaceScraper()
-        
-        # Initialize browser
-        scraper.playwright = await async_playwright().start()
-        launch_options = {
-            "headless": True,
-            "args": [
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--disable-web-security",
-                "--disable-features=IsolateOrigins,site-per-process",
-            ]
-        }
-        
-        scraper.browser = await scraper.playwright.chromium.launch(**launch_options)
-        context = await scraper.browser.new_context(
-            viewport={"width": 1920, "height": 1080},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        )
-        scraper.page = await context.new_page()
-        
-        try:
+        # Use async context manager — browser init is handled in __aenter__
+        async with FacebookMarketplaceScraper() as scraper:
             # Extract credentials from task payload
             email = scrape_request.get("email")
             password = scrape_request.get("password")
@@ -63,33 +40,25 @@ def scrape_marketplace_task(self, scrape_request: dict):
             )
             
             return results
-            
-        except Exception as e:
-            logger.error(f"Scrape error: {str(e)}")
-            # Don't retry on auth failures
-            if "login" in str(e).lower() or "credentials" in str(e).lower():
-                raise  # Let Celery mark as FAILURE
-            raise self.retry(exc=e, countdown=60)
-            
-        finally:
-            # Always cleanup
-            if scraper.browser:
-                await scraper.browser.close()
-            if scraper.playwright:
-                await scraper.playwright.stop()
 
     # Run async code
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
         listings = loop.run_until_complete(_run())
+    except Exception as e:
+        logger.error(f"Scrape error: {str(e)}")
+        # Don't retry on auth failures
+        if "login" in str(e).lower() or "credentials" in str(e).lower():
+            raise  # Let Celery mark as FAILURE
+        raise self.retry(exc=e, countdown=60)
     finally:
         loop.close()
 
     # Store results in database
     db = SessionLocal()
+    stored = 0
     try:
-        stored = 0
         for item in listings:
             existing = db.query(CarListing).filter(
                 CarListing.facebook_id == item.get("facebook_id")
