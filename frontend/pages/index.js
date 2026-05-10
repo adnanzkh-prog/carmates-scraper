@@ -516,5 +516,392 @@ const styles = {
         color: 'white',
         padding: '1.5rem'
     },
+    // ... (everything before line 519 stays exactly the same) ...
+
     headerContent: {
-        maxWidth: '120
+        maxWidth: '1200px',
+        margin: '0 auto'
+    },
+    title: {
+        margin: 0,
+        fontSize: '1.75rem',
+        fontWeight: 'bold'
+    },
+    subtitle: {
+        margin: '0.5rem 0 0',
+        opacity: 0.7,
+        fontSize: '0.875rem'
+    },
+    statusBadge: {
+        marginTop: '0.75rem',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        padding: '0.375rem 0.75rem',
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: '9999px',
+        fontSize: '0.75rem',
+        fontWeight: 600
+    },
+    statusDot: {
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+        display: 'inline-block'
+    },
+    main: {
+        maxWidth: '1200px',
+        margin: '0 auto',
+        padding: '1.5rem'
+    },
+    searchBox: {
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        padding: '1.5rem',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        marginBottom: '1.5rem',
+        border: '1px solid #e2e8f0'
+    },
+    searchRow: {
+        display: 'flex',
+        gap: '0.75rem',
+        flexWrap: 'wrap',
+        alignItems: 'stretch',
+        marginBottom: '1rem'
+    },
+    searchInput: {
+        flex: 1,
+        minWidth: '250px',
+        padding: '0.875rem 1rem',
+        border: '2px solid #e2e8f0',
+        borderRadius: '8px',
+        fontSize: '1rem',
+        outline: 'none',
+        fontFamily: 'inherit'
+    },
+    locationSelect: {
+        padding: '0.875rem 1rem',
+        border: '2px solid #e2e8f0',
+        borderRadius: '8px',
+        fontSize: '1rem',
+        backgroundColor: 'white',
+        cursor: 'pointer',
+        fontFamily: 'inherit'
+    },
+    searchButton: {
+        padding: '0.875rem 2rem',
+        backgroundColor: '#2563eb',
+        color: 'white',
+        border: 'none',
+        borderRadius: '8px',
+        fontSize: '1rem',
+        fontWeight: 600,
+        fontFamily: 'inherit',
+        whiteSpace: 'nowrap'
+    },
+    
+    // ─── Login Section Styles ───
+    loginSection: {
+        marginTop: '0.5rem',
+        borderTop: '1px solid #e2e8f0',
+        paddingTop: '1rem'
+    },
+    loginToggle: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        background: 'none',
+        border: 'none',
+        color: '#64748b',
+        fontSize: '0.875rem',
+        cursor: 'pointer',
+        padding: '0.5rem 0',
+        fontFamily: 'inherit',
+        width: '100%',
+        textAlign: 'left'
+    },
+    loginForm: {
+        marginTop: '0.75rem',
+        padding: '1rem',
+        backgroundColor: '#fefce8',
+        borderRadius: '8px',
+        border: '1px solid #fde047'
+    },
+    loginRow: {
+        display: 'flex',
+        gap: '0.75rem',
+        marginBottom: '0.75rem',
+        flexWrap: 'wrap'
+    },
+    loginInput: {
+        flex: 1,
+        minWidth: '200px',
+        padding: '0.625rem 0.875rem',
+        border: '1px solid #e2e8f0',
+        borderRadius: '6px',
+        fontSize: '0.875rem',
+        fontFamily: 'inherit'
+    },
+    loginOptions: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '0.5rem'
+    },
+    rememberLabel: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        fontSize: '0.875rem',
+        color: '#374151',
+        cursor: 'pointer'
+    },
+    checkbox: {
+        width: '16px',
+        height: '16px',
+        cursor: 'pointer'
+    },
+    clearCredsBtn: {
+        background: 'none',
+        border: 'none',
+        color: '#dc2626',
+        fontSize: '0.75rem',
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        textDecoration: 'underline'
+    },
+    loginHint: {
+        marginTop: '0.75rem',
+        fontSize: '0.75rem',
+        color: '#92400e',
+        lineHeight: 1.5
+    },
+    
+    progressBar: {
+        marginTop: '1rem',
+        padding: '0.75rem 1rem',
+        backgroundColor: '#eff6ff',
+        borderRadius: '8px',
+        border: '1px solid #bfdbfe',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+    },
+    progressText: {
+        color: '#1e40af',
+        fontSize: '0.875rem',
+        fontWeight: 500
+    },
+    taskId: {
+        color: '#64748b',
+        fontSize: '0.75rem',
+        fontFamily: 'monospace'
+    },
+    errorBox: {
+        marginTop: '1rem',
+        padding: '0.75rem 1rem',
+        backgroundColor: '#fef2f2',
+        borderRadius: '8px',
+        border: '1px solid #fecaca'
+    },
+    errorText: {
+        color: '#dc2626',
+        fontSize: '0.875rem',
+        lineHeight: 1.5,
+        margin: 0
+    },
+    exportBar: {
+        display: 'flex',
+        gap: '0.75rem',
+        marginBottom: '1rem'
+    },
+    exportBtn: {
+        padding: '0.5rem 1rem',
+        backgroundColor: 'white',
+        border: '1px solid #e2e8f0',
+        borderRadius: '6px',
+        fontSize: '0.875rem',
+        cursor: 'pointer',
+        color: '#374151'
+    },
+    resultsSection: {
+        minHeight: '200px'
+    },
+    resultsMeta: {
+        marginBottom: '1rem',
+        color: '#64748b',
+        fontSize: '0.875rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        flexWrap: 'wrap'
+    },
+    sourceTag: {
+        padding: '2px 8px',
+        backgroundColor: '#dbeafe',
+        color: '#1e40af',
+        borderRadius: '9999px',
+        fontSize: '0.75rem',
+        fontWeight: 600
+    },
+    loggedInTag: {
+        padding: '2px 8px',
+        backgroundColor: '#dcfce7',
+        color: '#166534',
+        borderRadius: '9999px',
+        fontSize: '0.75rem',
+        fontWeight: 600
+    },
+    grid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+        gap: '1rem'
+    },
+    card: {
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        border: '1px solid #e2e8f0'
+    },
+    imageContainer: {
+        height: '180px',
+        backgroundColor: '#f1f5f9',
+        position: 'relative',
+        overflow: 'hidden'
+    },
+    image: {
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        display: 'block'
+    },
+    imagePlaceholder: {
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#94a3b8',
+        fontSize: '0.875rem'
+    },
+    conditionBadge: {
+        position: 'absolute',
+        top: '8px',
+        left: '8px',
+        padding: '4px 10px',
+        borderRadius: '9999px',
+        fontSize: '0.7rem',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        backgroundColor: '#fef3c7',
+        color: '#92400e'
+    },
+    cardContent: {
+        padding: '1rem'
+    },
+    cardTitle: {
+        margin: '0 0 0.5rem',
+        fontSize: '1rem',
+        lineHeight: 1.4,
+        fontWeight: 600
+    },
+    titleLink: {
+        color: '#0f172a',
+        textDecoration: 'none'
+    },
+    price: {
+        fontSize: '1.5rem',
+        fontWeight: 700,
+        color: '#2563eb',
+        marginBottom: '0.75rem'
+    },
+    details: {
+        display: 'flex',
+        gap: '1rem',
+        fontSize: '0.875rem',
+        color: '#64748b',
+        marginBottom: '1rem',
+        flexWrap: 'wrap'
+    },
+    detailItem: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.25rem'
+    },
+    viewLink: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.25rem',
+        color: '#2563eb',
+        textDecoration: 'none',
+        fontWeight: 600,
+        fontSize: '0.875rem'
+    },
+    loadingState: {
+        textAlign: 'center',
+        padding: '3rem'
+    },
+    spinner: {
+        width: '40px',
+        height: '40px',
+        border: '3px solid #e2e8f0',
+        borderTopColor: '#2563eb',
+        borderRadius: '50%',
+        animation: 'spin 1s linear infinite',
+        margin: '0 auto 1rem'
+    },
+    loadingText: {
+        color: '#374151',
+        fontWeight: 500
+    },
+    loadingSubtext: {
+        color: '#94a3b8',
+        fontSize: '0.875rem',
+        marginTop: '0.5rem'
+    },
+    emptyState: {
+        textAlign: 'center',
+        padding: '3rem',
+        color: '#64748b'
+    },
+    emptyTitle: {
+        fontSize: '1.125rem',
+        fontWeight: 600,
+        marginBottom: '0.5rem',
+        color: '#374151'
+    },
+    emptySubtitle: {
+        fontSize: '0.875rem',
+        lineHeight: 1.5
+    },
+    initialState: {
+        textAlign: 'center',
+        padding: '3rem',
+        color: '#64748b'
+    },
+    initialTitle: {
+        fontSize: '1.25rem',
+        fontWeight: 600,
+        marginBottom: '0.5rem',
+        color: '#374151'
+    },
+    initialSubtitle: {
+        fontSize: '0.875rem'
+    },
+    initialNote: {
+        fontSize: '0.75rem',
+        color: '#94a3b8',
+        marginTop: '1rem',
+        lineHeight: 1.5
+    },
+    footer: {
+        textAlign: 'center',
+        padding: '2rem',
+        color: '#64748b',
+        fontSize: '0.875rem',
+        borderTop: '1px solid #e2e8f0',
+        marginTop: '2rem'
+    }
+};
