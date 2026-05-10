@@ -68,16 +68,16 @@ class FacebookMarketplaceScraper:
         if await self._load_saved_cookies():
             await self.page.goto("https://www.facebook.com/", timeout=settings.SCRAPE_TIMEOUT)
             if "login" not in self.page.url:
-                print("✅ Loaded existing session from cookies")
+                print("Loaded existing session from cookies")
                 return True
         
         # 2. No credentials? Return False for limited scrape mode
         if not email or not password:
-            print("⚠️ No credentials provided. Proceeding with limited scrape...")
+            print("No credentials provided. Proceeding with limited scrape...")
             return False
         
         # 3. Automated login with provided credentials
-        print(f"🔐 Logging in with email: {email[:3]}***")
+        print(f"Logging in with email: {email[:3]}***")
         await self.page.goto("https://www.facebook.com/login", timeout=settings.SCRAPE_TIMEOUT)
         
         await self.page.fill('input[name="email"]', email)
@@ -90,19 +90,19 @@ class FacebookMarketplaceScraper:
         
         # Check for 2FA/checkpoint
         if "twofactor" in current_url or "checkpoint" in current_url:
-            print("⚠️ 2FA/Checkpoint detected. Saving partial session.")
+            print("2FA/Checkpoint detected. Saving partial session.")
             await self._save_cookies()
             return False
         
         # Check if login succeeded
         if "login" not in current_url:
             await self._save_cookies()
-            print("✅ Login successful, cookies saved")
+            print("Login successful, cookies saved")
             return True
         else:
             raise Exception("Login failed: Invalid credentials or Facebook blocked the login")
 
-           async def scrape_marketplace(
+    async def scrape_marketplace(
         self,
         query: str,
         location: Optional[str] = None,
@@ -132,13 +132,13 @@ class FacebookMarketplaceScraper:
             params["condition"] = condition
         
         full_url = f"{base_url}?{urlencode(params)}"
-        print(f"🌐 Navigating to: {full_url}")
+        print(f"Navigating to: {full_url}")
         
         await self.page.goto(full_url, timeout=settings.SCRAPE_TIMEOUT)
         
         # Check if we got redirected to login
         if "login" in self.page.url:
-            print("⚠️ Facebook requires login for this search. Returning empty results.")
+            print("Facebook requires login for this search. Returning empty results.")
             return []
         
         # Scroll and extract listings
@@ -158,7 +158,7 @@ class FacebookMarketplaceScraper:
                 ):
                     all_results.append(listing)
             
-            print(f"📊 Scraped {len(all_results)} / {limit} listings")
+            print(f"Scraped {len(all_results)} / {limit} listings")
             
             # Check if we found new listings
             if len(all_results) == previous_count:
@@ -180,89 +180,10 @@ class FacebookMarketplaceScraper:
                 detailed_results.append(result)
                 await asyncio.sleep(random.uniform(0.5, 1.5))
             except Exception as e:
-                print(f"⚠️ Failed to get details for {result['listing_url']}: {e}")
+                print(f"Failed to get details for {result['listing_url']}: {e}")
                 detailed_results.append(result)
         
         return detailed_results
-        
+
     async def _extract_visible_listings(self) -> List[Dict[str, Any]]:
-        cards = await self.page.query_selector_all('a[href*="/marketplace/item/"]')
-        results = []
-        for card in cards:
-            try:
-                href = await card.get_attribute("href")
-                if not href:
-                    continue
-                fb_id_match = re.search(r"/item/(\d+)", href)
-                facebook_id = fb_id_match.group(1) if fb_id_match else None
-                title_elem = await card.query_selector('span[dir="auto"]')
-                title = await title_elem.inner_text() if title_elem else ""
-                price_elem = await card.query_selector('span[dir="auto"]:has-text("$")')
-                price_text = await price_elem.inner_text() if price_elem else ""
-                price = self._parse_price(price_text)
-                location_elem = await card.query_selector('div[dir="auto"]:nth-child(2)')
-                location = await location_elem.inner_text() if location_elem else ""
-                year = self._parse_year(title)
-                odometer = self._parse_odometer(title)
-                results.append({
-                    "facebook_id": facebook_id,
-                    "title": title.strip(),
-                    "price": price,
-                    "currency": settings.CURRENCY,
-                    "year": year,
-                    "odometer": odometer,
-                    "odometer_unit": settings.ODOMETER_UNIT,
-                    "location": location.strip(),
-                    "listing_url": f"https://facebook.com{href}" if not href.startswith("http") else href,
-                    "scrape_timestamp": datetime.utcnow(),
-                })
-            except Exception as e:
-                print(f"Error parsing card: {e}")
-                continue
-        return results
-
-    async def _extract_listing_details(self, url: str) -> Dict[str, Any]:
-        detail_page = await self.browser.new_page()
-        try:
-            await detail_page.goto(url, timeout=10000)
-            await detail_page.wait_for_load_state("networkidle")
-            desc_elem = await detail_page.query_selector('div[data-ad-preview="message"]')
-            description = await desc_elem.inner_text() if desc_elem else ""
-            image_elems = await detail_page.query_selector_all('img[src*=".jpg"]')
-            image_urls = [await img.get_attribute("src") for img in image_elems[:5]]
-            condition_elem = await detail_page.query_selector('span:has-text("Condition")')
-            condition = None
-            if condition_elem:
-                parent = await condition_elem.evaluate_handle("el => el.parentElement")
-                condition = await parent.evaluate("el => el.innerText")
-            return {
-                "description": description,
-                "image_urls": json.dumps(image_urls),
-                "condition": condition,
-            }
-        except Exception as e:
-            print(f"Failed to fetch details: {e}")
-            return {}
-        finally:
-            await detail_page.close()
-
-    def _parse_price(self, text: str) -> Optional[float]:
-        if not text:
-            return None
-        match = re.search(r"\$?([\d,]+(?:\.\d{2})?)", text)
-        if match:
-            return float(match.group(1).replace(",", ""))
-        return None
-
-    def _parse_year(self, text: str) -> Optional[int]:
-        match = re.search(r"\b(19|20)\d{2}\b", text)
-        return int(match.group(0)) if match else None
-
-    def _parse_odometer(self, text: str) -> Optional[int]:
-        match = re.search(r"(\d{2,5}(?:,\d{3})?)\s*km", text.lower())
-        if match:
-            return int(match.group(1).replace(",", ""))
-        match_k = re.search(r"(\d{1,3})k\s*km", text.lower())
-        if match_k:
-            return int(match_k.group(1)) * 1000
-        return None
+        cards = await self.page.query_selector_all('a[href*="/marketplace/item
