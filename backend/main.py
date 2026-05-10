@@ -1,7 +1,9 @@
+import os  # ← ADD THIS IF MISSING
+from pydantic import BaseModel, Field
+
 from fastapi import FastAPI, Depends, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
 from typing import Optional, List
 import json
 import pandas as pd
@@ -46,7 +48,7 @@ class ScrapeRequest(BaseModel):
     min_year: Optional[int] = None
     max_year: Optional[int] = None
     condition: Optional[str] = None
-    limit: int = 50
+    limit: int = Field(default=20, ge=1, le=100)
     email: Optional[str] = None
     password: Optional[str] = None
 
@@ -84,9 +86,22 @@ async def websocket_progress(websocket: WebSocket):
         manager.disconnect(websocket)
 
 @app.post("/scrape")
-async def scrape_and_store(request: ScrapeRequest):
-    task = scrape_marketplace_task.delay(request.dict())
-    return {"task_id": task.id, "status": "queued"}
+async def start_scrape(request: ScrapeRequest):
+    # Build the task payload with credentials
+    task_payload = request.dict()
+    
+    # Fallback to env vars if user didn't provide credentials
+    if not task_payload.get("email"):
+        task_payload["email"] = os.getenv("FACEBOOK_EMAIL")
+    if not task_payload.get("password"):
+        task_payload["password"] = os.getenv("FACEBOOK_PASSWORD")
+    
+    task = scrape_marketplace_task.delay(task_payload)
+    return {
+        "task_id": task.id,
+        "status": "queued",
+        "has_credentials": bool(task_payload.get("email") and task_payload.get("password"))
+    }
 
 @app.get("/scrape/status/{task_id}")
 def get_task_status(task_id: str):
