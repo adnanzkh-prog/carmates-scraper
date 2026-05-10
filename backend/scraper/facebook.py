@@ -102,7 +102,7 @@ class FacebookMarketplaceScraper:
         else:
             raise Exception("Login failed: Invalid credentials or Facebook blocked the login")
 
-        async def scrape_marketplace(
+           async def scrape_marketplace(
         self,
         query: str,
         location: Optional[str] = None,
@@ -110,9 +110,9 @@ class FacebookMarketplaceScraper:
         max_price: Optional[int] = None,
         min_year: Optional[int] = None,
         max_year: Optional[int] = None,
-        condition: Optional[str] = None,   # ← ADD THIS
-        limit: int = 20,                    # ← ADD THIS (was max_results)
-        **kwargs                            # ← ADD THIS for future-proofing
+        condition: Optional[str] = None,
+        limit: int = 20,
+        **kwargs
     ) -> List[Dict[str, Any]]:
         if not location:
             location = settings.DEFAULT_LOCATION
@@ -128,6 +128,8 @@ class FacebookMarketplaceScraper:
             params["minYear"] = min_year
         if max_year:
             params["maxYear"] = max_year
+        if condition:
+            params["condition"] = condition
         
         full_url = f"{base_url}?{urlencode(params)}"
         print(f"🌐 Navigating to: {full_url}")
@@ -145,7 +147,7 @@ class FacebookMarketplaceScraper:
         scroll_attempts = 0
         max_scrolls = 10
         
-        while len(all_results) < max_results and scroll_attempts < max_scrolls:
+        while len(all_results) < limit and scroll_attempts < max_scrolls:
             # Extract visible listings
             listings = await self._extract_visible_listings()
             
@@ -156,7 +158,7 @@ class FacebookMarketplaceScraper:
                 ):
                     all_results.append(listing)
             
-            print(f"📊 Scraped {len(all_results)} / {max_results} listings")
+            print(f"📊 Scraped {len(all_results)} / {limit} listings")
             
             # Check if we found new listings
             if len(all_results) == previous_count:
@@ -171,7 +173,7 @@ class FacebookMarketplaceScraper:
         
         # Fetch details for top results (limit to avoid timeout)
         detailed_results = []
-        for result in all_results[:max_results]:
+        for result in all_results[:limit]:
             try:
                 details = await self._extract_listing_details(result["listing_url"])
                 result.update(details)
@@ -182,7 +184,7 @@ class FacebookMarketplaceScraper:
                 detailed_results.append(result)
         
         return detailed_results
-
+        
     async def _extract_visible_listings(self) -> List[Dict[str, Any]]:
         cards = await self.page.query_selector_all('a[href*="/marketplace/item/"]')
         results = []
