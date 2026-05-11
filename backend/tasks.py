@@ -47,10 +47,26 @@ def scrape_marketplace_task(self, scrape_request: dict):
     try:
         listings = loop.run_until_complete(_run())
     except Exception as e:
+        error_msg = str(e).lower()
         logger.error(f"Scrape error: {str(e)}")
-        # Don't retry on auth failures
-        if "login" in str(e).lower() or "credentials" in str(e).lower():
-            raise  # Let Celery mark as FAILURE
+        
+        # Don't retry on these failures — they won't succeed on retry
+        non_retryable = [
+            "timeout",
+            "login",
+            "credentials",
+            "checkpoint",
+            "blocked",
+            "banned",
+            "unauthorized",
+            "forbidden",
+        ]
+        
+        if any(keyword in error_msg for keyword in non_retryable):
+            logger.warning("Non-retryable error detected. Marking task as FAILED.")
+            raise  # Let Celery mark as FAILURE immediately, no retry loop
+        
+        # Retry on potentially transient errors (network, rate limit, etc.)
         raise self.retry(exc=e, countdown=60)
     finally:
         loop.close()
