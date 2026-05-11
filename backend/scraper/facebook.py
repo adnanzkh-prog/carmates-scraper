@@ -66,7 +66,7 @@ class FacebookMarketplaceScraper:
     async def login(self, email: str = None, password: str = None):
         # 1. Try saved cookies first
         if await self._load_saved_cookies():
-            await self.page.goto("https://www.facebook.com/", timeout=60000)  # ← INCREASED
+            await self.page.goto("https://www.facebook.com/", timeout=60000)
             if "login" not in self.page.url:
                 print("Loaded existing session from cookies")
                 return True
@@ -79,41 +79,110 @@ class FacebookMarketplaceScraper:
         # 3. Automated login with provided credentials
         print(f"Logging in with email: {email[:3]}***")
         
-        # DEBUG: Take screenshot before navigation
         try:
-            await self.page.goto("https://www.facebook.com/login", timeout=60000)  # ← INCREASED
+            await self.page.goto("https://www.facebook.com/login", timeout=60000)
             print(f"Login page loaded. URL: {self.page.url}")
         except Exception as e:
             print(f"Failed to load login page: {e}")
             return False
         
-        # DEBUG: Take screenshot of login page
+        # DEBUG: Screenshot
         try:
             await self.page.screenshot(path="/tmp/login_page.png")
             print("Screenshot saved to /tmp/login_page.png")
         except:
             pass
         
-        # Check if we're actually on the login page
+        # Check if we're on login page
         if "login" not in self.page.url:
             print(f"Unexpected redirect. Current URL: {self.page.url}")
             return False
         
+        # Handle cookie consent popup if present
         try:
-            # Wait for form with longer timeout
-            await self.page.wait_for_selector('input[name="email"]', timeout=15000)
-            await self.page.fill('input[name="email"]', email)
-            await self.page.fill('input[name="pass"]', password)
-            await self.page.click('button[name="login"]')
-        except Exception as e:
-            print(f"Login form interaction failed: {e}")
+            cookie_buttons = [
+                'button[data-testid="cookie-policy-manage-dialog-accept-button"]',
+                'button[title="Allow essential and optional cookies"]',
+                'div[role="button"]:has-text("Allow")',
+                'button:has-text("Accept")',
+            ]
+            for btn in cookie_buttons:
+                try:
+                    consent = await self.page.query_selector(btn)
+                    if consent:
+                        await consent.click()
+                        await asyncio.sleep(1)
+                        print("Cookie consent accepted")
+                        break
+                except:
+                    continue
+        except:
+            pass
+        
+        # Wait for and fill login form with multiple selector fallbacks
+        email_selectors = [
+            'input[name="email"]',
+            'input[id="email"]',
+            'input[type="text"]',
+            'input[placeholder*="Email"]',
+            'input[placeholder*="Phone"]',
+        ]
+        
+        pass_selectors = [
+            'input[name="pass"]',
+            'input[id="pass"]',
+            'input[type="password"]',
+        ]
+        
+        login_btn_selectors = [
+            'button[name="login"]',
+            'button[type="submit"]',
+            'button:has-text("Log in")',
+            'button:has-text("Log In")',
+        ]
+        
+        # Try to find email field
+        email_field = None
+        for selector in email_selectors:
+            try:
+                email_field = await self.page.wait_for_selector(selector, timeout=10000)
+                if email_field:
+                    print(f"Found email field: {selector}")
+                    break
+            except:
+                continue
+        
+        if not email_field:
+            print("Could not find email field. Facebook may be showing a challenge.")
             return False
         
-        # INCREASED wait time
+        # Fill credentials
         try:
-            await self.page.wait_for_load_state("networkidle", timeout=30000)
+            await self.page.fill('input[name="email"]', email)
+            await self.page.fill('input[name="pass"]', password)
+        except Exception as e:
+            print(f"Fill failed: {e}")
+            return False
+        
+        # Click login with fallback
+        for btn in login_btn_selectors:
+            try:
+                button = await self.page.query_selector(btn)
+                if button:
+                    await button.click()
+                    print(f"Clicked login button: {btn}")
+                    break
+            except:
+                continue
+        
+        # Wait for navigation with longer timeout
+        try:
+            await self.page.wait_for_load_state("networkidle", timeout=45000)
         except:
             print("Network idle timeout, continuing anyway...")
+        
+        # Wait a bit for redirects to settle
+        await asyncio.sleep(3)
         
         current_url = self.page.url
         print(f"Post-login URL: {current_url}")
@@ -131,7 +200,7 @@ class FacebookMarketplaceScraper:
             return True
         else:
             print(f"Login failed. Still on: {current_url}")
-            return False  # ← DON'T RAISE, RETURN FALSE INSTEAD
+            return False
     
     async def scrape_marketplace(
         self,
