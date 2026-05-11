@@ -66,42 +66,73 @@ class FacebookMarketplaceScraper:
     async def login(self, email: str = None, password: str = None):
         # 1. Try saved cookies first
         if await self._load_saved_cookies():
-            await self.page.goto("https://www.facebook.com/", timeout=settings.SCRAPE_TIMEOUT)
+            await self.page.goto("https://www.facebook.com/", timeout=60000)  # ← INCREASED
             if "login" not in self.page.url:
                 print("Loaded existing session from cookies")
                 return True
-
+        
         # 2. No credentials? Return False for limited scrape mode
         if not email or not password:
             print("No credentials provided. Proceeding with limited scrape...")
             return False
-
+        
         # 3. Automated login with provided credentials
         print(f"Logging in with email: {email[:3]}***")
-        await self.page.goto("https://www.facebook.com/login", timeout=settings.SCRAPE_TIMEOUT)
-
-        await self.page.fill('input[name="email"]', email)
-        await self.page.fill('input[name="pass"]', password)
-        await self.page.click('button[name="login"]')
-
-        await self.page.wait_for_load_state("networkidle", timeout=15000)
-
+        
+        # DEBUG: Take screenshot before navigation
+        try:
+            await self.page.goto("https://www.facebook.com/login", timeout=60000)  # ← INCREASED
+            print(f"Login page loaded. URL: {self.page.url}")
+        except Exception as e:
+            print(f"Failed to load login page: {e}")
+            return False
+        
+        # DEBUG: Take screenshot of login page
+        try:
+            await self.page.screenshot(path="/tmp/login_page.png")
+            print("Screenshot saved to /tmp/login_page.png")
+        except:
+            pass
+        
+        # Check if we're actually on the login page
+        if "login" not in self.page.url:
+            print(f"Unexpected redirect. Current URL: {self.page.url}")
+            return False
+        
+        try:
+            # Wait for form with longer timeout
+            await self.page.wait_for_selector('input[name="email"]', timeout=15000)
+            await self.page.fill('input[name="email"]', email)
+            await self.page.fill('input[name="pass"]', password)
+            await self.page.click('button[name="login"]')
+        except Exception as e:
+            print(f"Login form interaction failed: {e}")
+            return False
+        
+        # INCREASED wait time
+        try:
+            await self.page.wait_for_load_state("networkidle", timeout=30000)
+        except:
+            print("Network idle timeout, continuing anyway...")
+        
         current_url = self.page.url
-
+        print(f"Post-login URL: {current_url}")
+        
         # Check for 2FA/checkpoint
         if "twofactor" in current_url or "checkpoint" in current_url:
             print("2FA/Checkpoint detected. Saving partial session.")
             await self._save_cookies()
             return False
-
+        
         # Check if login succeeded
         if "login" not in current_url:
             await self._save_cookies()
             print("Login successful, cookies saved")
             return True
         else:
-            raise Exception("Login failed: Invalid credentials or Facebook blocked the login")
-
+            print(f"Login failed. Still on: {current_url}")
+            return False  # ← DON'T RAISE, RETURN FALSE INSTEAD
+    
     async def scrape_marketplace(
         self,
         query: str,
