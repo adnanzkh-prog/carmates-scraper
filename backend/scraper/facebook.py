@@ -183,7 +183,35 @@ class FacebookMarketplaceScraper:
         
         # Wait a bit for redirects to settle
         await asyncio.sleep(3)
-        
+                # DEBUG: Check for error messages on the page
+        try:
+            page_html = await self.page.content()
+            
+            # Check for common Facebook error indicators
+            error_indicators = [
+                "The password you entered is incorrect",
+                "The email you entered isn't connected to an account",
+                "Forgotten password",
+                "suspicious",
+                "unusual activity",
+                "temporarily blocked",
+                "confirm your identity",
+                "upload a photo",
+            ]
+            
+            for indicator in error_indicators:
+                if indicator.lower() in page_html.lower():
+                    print(f"Facebook error detected: '{indicator}'")
+            
+            # Try to extract visible error text
+            error_elems = await self.page.query_selector_all('div[role="alert"], .uiMessageBox, [data-testid*="error"]')
+            for elem in error_elems:
+                text = await elem.inner_text()
+                print(f"Page error text: {text}")
+                
+        except Exception as e:
+            print(f"Error parsing page: {e}")
+            
         current_url = self.page.url
         print(f"Post-login URL: {current_url}")
         
