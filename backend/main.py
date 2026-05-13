@@ -1,11 +1,13 @@
-import os  # ← ADD THIS IF MISSING
+import os
 from pydantic import BaseModel, Field
 
 from fastapi import FastAPI, Depends, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
 import json
+import glob
 import pandas as pd
 from io import BytesIO
 from fastapi.responses import StreamingResponse
@@ -51,6 +53,9 @@ class ScrapeRequest(BaseModel):
     limit: int = Field(default=20, ge=1, le=100)
     email: Optional[str] = None
     password: Optional[str] = None
+    # ─── NEW: Source toggles ───
+    include_facebook: bool = True
+    include_gumtree: bool = True
 
 class ScheduledJob(BaseModel):
     cron_expression: str
@@ -88,10 +93,9 @@ async def websocket_progress(websocket: WebSocket):
 @app.post("/scrape")
 async def start_scrape(request: ScrapeRequest):
     # Build payload with credentials from request OR env vars as fallback
-    # Use .get() with default None to avoid KeyError if fields missing
     email = request.email or os.getenv("FACEBOOK_EMAIL") or None
     password = request.password or os.getenv("FACEBOOK_PASSWORD") or None
-    
+
     task_payload = {
         "query": request.query,
         "location": request.location,
@@ -101,22 +105,53 @@ async def start_scrape(request: ScrapeRequest):
         "max_year": request.max_year,
         "condition": request.condition,
         "limit": request.limit,
-        "email": email,        # None if not provided anywhere
-        "password": password,  # None if not provided anywhere
+        "email": email,
+        "password": password,
+        # ─── NEW: Pass source toggles to task ───
+        "include_facebook": request.include_facebook,
+        "include_gumtree": request.include_gumtree,
     }
-    
+
     task = scrape_marketplace_task.delay(task_payload)
-    
+
     return {
         "task_id": task.id,
         "status": "queued",
-        "has_credentials": bool(email and password)
+        "has_credentials": bool(email and password),
+        "sources": {
+            "facebook": request.include_facebook,
+            "gumtree": request.include_gumtree,
+        }
     }
 
 @app.get("/scrape/status/{task_id}")
 def get_task_status(task_id: str):
     result = celery_app.AsyncResult(task_id)
     return {"task_id": task_id, "status": result.status, "result": result.result if result.ready() else None}
+
+# ─── NEW: Debug Screenshot API ───
+@app.get("/debug/screenshots")
+def list_screenshots():
+    """List available debug screenshots from failed Facebook logins."""
+    files = glob.glob("/tmp/fb_error_*.png")
+    return {
+        "screenshots": [
+            {
+                "filename": os.path.basename(f),
+                "timestamp": os.path.basename(f).replace("fb_error_", "").replace(".png", ""),
+                "url": f"/debug/screenshots/{os.path.basename(f)}"
+            }
+            for f in sorted(files, reverse=True)
+        ]
+    }
+
+@app.get("/debug/screenshots/{filename}")
+def get_screenshot(filename: str):
+    """Serve a specific screenshot."""
+    filepath = f"/tmp/{filename}"
+    if os.path.exists(filepath):
+        return FileResponse(filepath, media_type="image/png")
+    return JSONResponse({"error": "Screenshot not found"}, status_code=404)
 
 @app.post("/scrape/sync")
 async def scrape_sync(request: ScrapeRequest, db: Session = Depends(get_db)):
@@ -151,7 +186,7 @@ async def scrape_sync(request: ScrapeRequest, db: Session = Depends(get_db)):
 @app.get("/listings")
 def get_listings(skip: int = 0, limit: int = 100, min_price: Optional[float] = None,
                 max_price: Optional[float] = None, make: Optional[str] = None,
-                search: Optional[str] = None, db: Session = Depends(get_db)):
+                search: Optional[str] = None, source: Optional[str] = None, db: Session = Depends(get_db)):
     query = db.query(CarListing)
     if min_price:
         query = query.filter(CarListing.price >= min_price)
@@ -163,6 +198,10 @@ def get_listings(skip: int = 0, limit: int = 100, min_price: Optional[float] = N
         query = query.filter(
             (CarListing.title.ilike(f"%{search}%")) | (CarListing.description.ilike(f"%{search}%"))
         )
+    # ─── NEW: Filter by source ───
+    if source:
+        query = query.filter(CarListing.source == source)
+
     total = query.count()
     listings = query.offset(skip).limit(limit).all()
     return {"total": total, "listings": listings}
@@ -180,6 +219,7 @@ def export_csv(db: Session = Depends(get_db)):
         "odometer_unit": l.odometer_unit,
         "location": l.location,
         "listing_url": l.listing_url,
+        "source": l.source,
         "scrape_timestamp": l.scrape_timestamp
     } for l in listings]
     df = pd.DataFrame(data)
@@ -202,6 +242,7 @@ def export_excel(db: Session = Depends(get_db)):
         "odometer_unit": l.odometer_unit,
         "location": l.location,
         "listing_url": l.listing_url,
+        "source": l.source,
         "scrape_timestamp": l.scrape_timestamp
     } for l in listings]
     df = pd.DataFrame(data)
